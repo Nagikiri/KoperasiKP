@@ -1,0 +1,68 @@
+/.phpunit.cache
+/node_modules
+/public/build
+/public/hot
+/public/storage
+/storage/*.key
+/vendor
+.env
+.env.backup
+.env.production
+.phpunit.result.cache
+Homestead.json
+Homestead.yaml
+auth.json
+npm-debug.log
+yarn-error.log
+/.fleet
+/.idea
+/.vscode
+
+# Dokumen internal / rahasia dapur
+/docs/
+
+# Environment dan kredensial lokal
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.jks
+*.keystore
+credentials.json
+service-account*.json
+secrets.*
+!.gitignore
+
+# Cache, log, dan file sementara Laravel / PHP
+/bootstrap/cache/*.php
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/logs/*
+*.log
+*.cache
+*.tmp
+*.temp
+
+# Database lokal
+/database/*.sqlite
+/database/*.sqlite-*
+
+# Hasil build dan dependency frontend tambahan
+/public/mix-manifest.json
+/public/build/
+/dist/
+/coverage/
+/npm-debug.log*
+/yarn-debug.log*
+/yarn-error.log*
+/pnpm-debug.log*
+
+# File sistem operasi
+.DS_Store
+Thumbs.db
+Desktop.ini
