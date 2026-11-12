@@ -9,6 +9,10 @@ class Anggota extends Model
 {
     use HasFactory;
 
+    public const STATUS_AKTIF = 'aktif';
+
+    public const STATUS_NONAKTIF = 'nonaktif';
+
     // WAJIB dideklarasikan agar Eloquent tidak mencari tabel 'anggotas'
     protected $table = 'anggota';
 
@@ -31,19 +35,29 @@ class Anggota extends Model
         return $this->hasMany(TransaksiSimpanan::class, 'anggota_id');
     }
 
-    // Helper untuk hitung saldo per jenis simpanan (dipakai di detail anggota & validasi penarikan)
-    public function saldoPerJenis($jenisSimpananId): float
+    public function scopeAktif($query)
     {
-        $setor = $this->transaksiSimpanan()
-            ->where('jenis_simpanan_id', $jenisSimpananId)
-            ->where('jenis_transaksi', 'setor')
-            ->sum('jumlah');
+        return $query->where('status', self::STATUS_AKTIF);
+    }
 
-        $tarik = $this->transaksiSimpanan()
-            ->where('jenis_simpanan_id', $jenisSimpananId)
-            ->where('jenis_transaksi', 'tarik')
-            ->sum('jumlah');
+    public function isAktif(): bool
+    {
+        return $this->status === self::STATUS_AKTIF;
+    }
 
-        return (float) ($setor - $tarik);
+    public function saldoPerJenis(int $jenisSimpananId, ?string $sampaiTanggal = null): float
+    {
+        $query = $this->transaksiSimpanan()->where('jenis_simpanan_id', $jenisSimpananId);
+
+        if ($sampaiTanggal) {
+            $query->whereDate('tanggal_transaksi', '<=', $sampaiTanggal);
+        }
+
+        $hasil = $query->selectRaw(
+            "COALESCE(SUM(CASE WHEN jenis_transaksi = 'setor' THEN jumlah ELSE 0 END), 0)
+           - COALESCE(SUM(CASE WHEN jenis_transaksi = 'tarik' THEN jumlah ELSE 0 END), 0) AS saldo"
+        )->value('saldo');
+
+        return round((float) $hasil, 2);
     }
 }

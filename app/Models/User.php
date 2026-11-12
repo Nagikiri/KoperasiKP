@@ -15,7 +15,6 @@ class User extends Authenticatable
     protected $fillable = [
         'nama',
         'username',
-        'email',
         'password',
         'no_telepon',
     ];
@@ -25,12 +24,9 @@ class User extends Authenticatable
         'remember_token',
     ];
 
-    protected function casts(): array
-    {
-        return [
-            'password' => 'hashed',
-        ];
-    }
+    protected $casts = [
+        'password' => 'hashed',
+    ];
 
     public function transaksiSimpanan()
     {

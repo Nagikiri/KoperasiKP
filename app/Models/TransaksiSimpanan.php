@@ -9,6 +9,10 @@ class TransaksiSimpanan extends Model
 {
     use HasFactory;
 
+    public const SETOR = 'setor';
+
+    public const TARIK = 'tarik';
+
     // WAJIB dideklarasikan agar Eloquent tidak mencari tabel 'transaksi_simpanans'
     protected $table = 'transaksi_simpanan';
 

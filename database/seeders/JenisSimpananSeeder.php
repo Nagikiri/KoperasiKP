@@ -11,15 +11,15 @@ class JenisSimpananSeeder extends Seeder
     {
         $data = [
             [
-                'nama_jenis' => 'Simpanan Pokok',
+                'nama_jenis' => JenisSimpanan::POKOK,
                 'keterangan' => 'Dibayar sekali saat pertama kali mendaftar menjadi anggota',
             ],
             [
-                'nama_jenis' => 'Simpanan Wajib',
+                'nama_jenis' => JenisSimpanan::WAJIB,
                 'keterangan' => 'Dibayar rutin setiap periode tertentu',
             ],
             [
-                'nama_jenis' => 'Simpanan Sukarela',
+                'nama_jenis' => JenisSimpanan::SUKARELA,
                 'keterangan' => 'Dapat disetor dan ditarik sewaktu-waktu',
             ],
         ];

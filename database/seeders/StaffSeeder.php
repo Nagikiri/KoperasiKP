@@ -14,7 +14,6 @@ class StaffSeeder extends Seeder
             ['username' => 'admin'],
             [
                 'nama' => 'Admin Koperasi',
-                'email' => 'admin@kspkaryaduta.test',
                 'password' => Hash::make('password123'),
                 'no_telepon' => '081234567890',
             ]
