@@ -17,6 +17,6 @@ class Format
             return '-';
         }
 
-        return Carbon::parse($tanggal)->translatedFormat('d F Y');
+        return Carbon::parse($tanggal)->translatedFormat('j F Y');
     }
 }

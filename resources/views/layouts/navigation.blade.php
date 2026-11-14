@@ -18,6 +18,15 @@
                     <x-nav-link :href="route('anggota.index')" :active="request()->routeIs('anggota.*')">
                         Data Anggota
                     </x-nav-link>
+                    <x-nav-link :href="route('transaksi.setor.create')" :active="request()->routeIs('transaksi.setor.*')">
+                        Setor
+                    </x-nav-link>
+                    <x-nav-link :href="route('transaksi.tarik.create')" :active="request()->routeIs('transaksi.tarik.*')">
+                        Tarik
+                    </x-nav-link>
+                    <x-nav-link :href="route('transaksi.riwayat')" :active="request()->routeIs('transaksi.riwayat')">
+                        Riwayat Transaksi
+                    </x-nav-link>
                 </div>
             </div>
 
@@ -75,6 +84,15 @@
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('anggota.index')" :active="request()->routeIs('anggota.*')">
                 Data Anggota
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('transaksi.setor.create')" :active="request()->routeIs('transaksi.setor.*')">
+                Setor
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('transaksi.tarik.create')" :active="request()->routeIs('transaksi.tarik.*')">
+                Tarik
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('transaksi.riwayat')" :active="request()->routeIs('transaksi.riwayat')">
+                Riwayat Transaksi
             </x-responsive-nav-link>
         </div>
 

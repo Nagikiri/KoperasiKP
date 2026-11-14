@@ -3,6 +3,7 @@
 use App\Http\Controllers\AnggotaController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PublicController;
+use App\Http\Controllers\TransaksiSimpananController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -28,6 +29,13 @@ Route::middleware('auth')->group(function () {
         ->whereNumber('anggota')->name('anggota.update');
     Route::patch('/anggota/{anggota}/nonaktifkan', [AnggotaController::class, 'nonaktifkan'])
         ->whereNumber('anggota')->name('anggota.nonaktifkan');
+
+    // Transaksi simpanan: hanya catat dan lihat, tanpa ubah/hapus (BR-11).
+    Route::get('/transaksi/setor', [TransaksiSimpananController::class, 'createSetor'])->name('transaksi.setor.create');
+    Route::post('/transaksi/setor', [TransaksiSimpananController::class, 'storeSetor'])->name('transaksi.setor.store');
+    Route::get('/transaksi/tarik', [TransaksiSimpananController::class, 'createTarik'])->name('transaksi.tarik.create');
+    Route::post('/transaksi/tarik', [TransaksiSimpananController::class, 'storeTarik'])->name('transaksi.tarik.store');
+    Route::get('/transaksi/riwayat', [TransaksiSimpananController::class, 'riwayat'])->name('transaksi.riwayat');
 });
 
 require __DIR__.'/auth.php';

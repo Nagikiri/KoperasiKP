@@ -250,7 +250,7 @@ class AnggotaTest extends TestCase
         $response->assertRedirect(route('anggota.edit', $anggota));
         $response->assertSessionHasErrors('tanggal_bergabung');
         $this->assertSame(
-            'Tanggal bergabung tidak boleh setelah transaksi pertama anggota (01 Maret 2026).',
+            'Tanggal bergabung tidak boleh setelah transaksi pertama anggota (1 Maret 2026).',
             session('errors')->first('tanggal_bergabung')
         );
         $this->assertSame('2026-01-01', $anggota->refresh()->tanggal_bergabung->format('Y-m-d'));

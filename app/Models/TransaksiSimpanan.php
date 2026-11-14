@@ -17,6 +17,7 @@ class TransaksiSimpanan extends Model
     protected $table = 'transaksi_simpanan';
 
     protected $fillable = [
+        'kode_referensi',
         'anggota_id',
         'jenis_simpanan_id',
         'staff_id',
