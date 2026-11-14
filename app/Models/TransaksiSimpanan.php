@@ -25,6 +25,7 @@ class TransaksiSimpanan extends Model
         'jumlah',
         'tanggal_transaksi',
         'saldo_akhir',
+        'keterangan',
     ];
 
     protected $casts = [

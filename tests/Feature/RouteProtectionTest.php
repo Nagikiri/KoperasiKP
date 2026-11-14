@@ -30,7 +30,7 @@ class RouteProtectionTest extends TestCase
             }
 
             if (! in_array('auth', $route->gatherMiddleware(), true)) {
-                $tanpaAuth[] = implode('|', $route->methods()) . ' ' . $uri;
+                $tanpaAuth[] = implode('|', $route->methods()).' '.$uri;
             }
         }
 

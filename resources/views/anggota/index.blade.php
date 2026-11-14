@@ -38,7 +38,7 @@
                         <td>{{ $item->nama }}</td>
                         <td>{{ $item->nik }}</td>
                         <td>{{ $item->no_telepon ?? '-' }}</td>
-                        <td>{{ ucfirst($item->status) }}</td>
+                        <td><x-status-anggota :status="$item->status" /></td>
                         <td>
                             <a href="{{ route('anggota.show', $item) }}">Detail</a>
                             <a href="{{ route('anggota.edit', $item) }}">Ubah</a>

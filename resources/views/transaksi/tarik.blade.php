@@ -7,9 +7,7 @@
 
     <p>Penarikan hanya untuk Simpanan Sukarela. Simpanan Pokok dan Wajib dikembalikan saat anggota keluar dari koperasi.</p>
 
-    {{-- onsubmit: tombol dinonaktifkan setelah klik pertama. Pengaman utama tetap kode_referensi di server (BR-19). --}}
-    <form method="POST" action="{{ route('transaksi.tarik.store') }}"
-          onsubmit="this.querySelector('button[type=submit]').disabled = true;">
+    <form method="POST" action="{{ route('transaksi.tarik.store') }}">
         @csrf
         <input type="hidden" name="kode_referensi" value="{{ $kodeReferensi }}">
         @error('kode_referensi')
@@ -49,6 +47,14 @@
             <input id="tanggal_transaksi" type="date" name="tanggal_transaksi"
                    value="{{ old('tanggal_transaksi', $tanggalHariIni) }}" max="{{ $tanggalHariIni }}">
             @error('tanggal_transaksi')
+                <p>{{ $message }}</p>
+            @enderror
+        </div>
+
+        <div>
+            <label for="keterangan">Catatan (opsional)</label>
+            <input id="keterangan" type="text" name="keterangan" value="{{ old('keterangan') }}" maxlength="255">
+            @error('keterangan')
                 <p>{{ $message }}</p>
             @enderror
         </div>

@@ -23,11 +23,11 @@ class AnggotaFactory extends Factory
         static::$urutan++;
 
         return [
-            'no_anggota' => 'KSP-2000-' . str_pad((string) static::$urutan, 4, '0', STR_PAD_LEFT),
+            'no_anggota' => 'KSP-2000-'.str_pad((string) static::$urutan, 4, '0', STR_PAD_LEFT),
             'nama' => fake()->name(),
-            'nik' => fake()->unique()->numerify(fake()->numberBetween(1, 9) . '###############'),
+            'nik' => fake()->unique()->numerify(fake()->numberBetween(1, 9).'###############'),
             'alamat' => fake()->address(),
-            'no_telepon' => '08' . fake()->numerify('##########'),
+            'no_telepon' => '08'.fake()->numerify('##########'),
             'tanggal_bergabung' => '2020-01-01',
             'status' => Anggota::STATUS_AKTIF,
         ];

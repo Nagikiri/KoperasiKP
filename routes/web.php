@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AnggotaController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\LaporanController;
 use App\Http\Controllers\PublicController;
 use App\Http\Controllers\TransaksiSimpananController;
 use Illuminate\Support\Facades\Route;
@@ -36,6 +37,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/transaksi/tarik', [TransaksiSimpananController::class, 'createTarik'])->name('transaksi.tarik.create');
     Route::post('/transaksi/tarik', [TransaksiSimpananController::class, 'storeTarik'])->name('transaksi.tarik.store');
     Route::get('/transaksi/riwayat', [TransaksiSimpananController::class, 'riwayat'])->name('transaksi.riwayat');
+
+    // Laporan: per anggota dan rekap & laporan keseluruhan, plus ekspor (satu sumber data LaporanService).
+    Route::get('/laporan/anggota', [LaporanController::class, 'anggota'])->name('laporan.anggota');
+    Route::get('/laporan/anggota/pdf', [LaporanController::class, 'pdf'])->name('laporan.anggota.pdf');
+    Route::get('/laporan/anggota/excel', [LaporanController::class, 'excel'])->name('laporan.anggota.excel');
+    Route::get('/laporan/keseluruhan', [LaporanController::class, 'keseluruhan'])->name('laporan.keseluruhan');
+    Route::get('/laporan/keseluruhan/pdf', [LaporanController::class, 'pdfKeseluruhan'])->name('laporan.keseluruhan.pdf');
+    Route::get('/laporan/keseluruhan/excel', [LaporanController::class, 'excelKeseluruhan'])->name('laporan.keseluruhan.excel');
 });
 
 require __DIR__.'/auth.php';

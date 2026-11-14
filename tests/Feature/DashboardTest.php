@@ -6,8 +6,10 @@ use App\Models\Anggota;
 use App\Models\JenisSimpanan;
 use App\Models\TransaksiSimpanan;
 use App\Models\User;
+use Carbon\Carbon;
 use Database\Seeders\JenisSimpananSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class DashboardTest extends TestCase
@@ -20,8 +22,17 @@ class DashboardTest extends TestCase
     {
         parent::setUp();
 
+        Carbon::setTestNow('2026-11-12 10:00:00');
+
         $this->seed(JenisSimpananSeeder::class);
         $this->admin = User::factory()->create();
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+
+        parent::tearDown();
     }
 
     public function test_tamu_diarahkan_ke_login(): void
@@ -34,21 +45,134 @@ class DashboardTest extends TestCase
         $response = $this->actingAs($this->admin)->get(route('dashboard'));
 
         $response->assertOk();
-        $response->assertViewHas('totalAnggotaAktif', 0);
+        $response->assertViewHas('ringkasanAnggota', ['aktif' => 0, 'nonaktif' => 0, 'baru_bulan_ini' => 0]);
         $response->assertViewHas('totalSaldo', 0.0);
+        $response->assertViewHas('aktivitasHariIni', ['jumlah_transaksi' => 0, 'total_setor' => 0.0, 'total_tarik' => 0.0]);
+        $response->assertViewHas('aktivitasBulanIni', ['jumlah_transaksi' => 0, 'total_setor' => 0.0, 'total_tarik' => 0.0]);
+        $response->assertViewHas('jumlahBelumSetorWajib', 0);
         $this->assertCount(3, $response->viewData('rekapSaldo'));
+        $this->assertCount(6, $response->viewData('trenBulanan'));
+        $this->assertCount(0, $response->viewData('belumSetorWajib'));
         $this->assertCount(0, $response->viewData('transaksiTerbaru'));
     }
 
-    public function test_total_anggota_aktif_tidak_menghitung_anggota_nonaktif(): void
+    public function test_ringkasan_anggota_aktif_nonaktif_dan_baru_bulan_ini(): void
     {
-        Anggota::factory()->count(2)->create();
-        Anggota::factory()->nonaktif()->create();
+        Anggota::factory()->create(['tanggal_bergabung' => '2026-11-05']);
+        Anggota::factory()->create(['tanggal_bergabung' => '2026-10-31']);
+        Anggota::factory()->create(['tanggal_bergabung' => '2026-11-01']);
+        Anggota::factory()->nonaktif()->create(['tanggal_bergabung' => '2026-11-12']);
 
-        $this->actingAs($this->admin)
-            ->get(route('dashboard'))
-            ->assertOk()
-            ->assertViewHas('totalAnggotaAktif', 2);
+        $response = $this->actingAs($this->admin)->get(route('dashboard'));
+
+        $response->assertOk();
+        // Baru bulan ini = tanggal_bergabung di bulan berjalan, aktif maupun nonaktif.
+        $response->assertViewHas('ringkasanAnggota', ['aktif' => 3, 'nonaktif' => 1, 'baru_bulan_ini' => 3]);
+        $response->assertSee('3 anggota baru bulan ini');
+    }
+
+    public function test_aktivitas_hari_ini_dan_bulan_ini(): void
+    {
+        $anggota = Anggota::factory()->create();
+
+        $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::SETOR, 100000, '2026-11-12');
+        $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::TARIK, 30000, '2026-11-12');
+        $this->buatTransaksi($anggota, JenisSimpanan::WAJIB, TransaksiSimpanan::SETOR, 50000, '2026-11-01');
+        $this->buatTransaksi($anggota, JenisSimpanan::POKOK, TransaksiSimpanan::SETOR, 70000, '2026-10-31');
+
+        $response = $this->actingAs($this->admin)->get(route('dashboard'));
+
+        $response->assertViewHas('aktivitasHariIni', ['jumlah_transaksi' => 2, 'total_setor' => 100000.0, 'total_tarik' => 30000.0]);
+        $response->assertViewHas('aktivitasBulanIni', ['jumlah_transaksi' => 3, 'total_setor' => 150000.0, 'total_tarik' => 30000.0]);
+    }
+
+    public function test_tren_enam_bulan_urut_lama_ke_baru_termasuk_bulan_kosong(): void
+    {
+        $anggota = Anggota::factory()->create();
+
+        $this->buatTransaksi($anggota, JenisSimpanan::POKOK, TransaksiSimpanan::SETOR, 99000, '2026-05-31'); // di luar 6 bulan
+        $this->buatTransaksi($anggota, JenisSimpanan::POKOK, TransaksiSimpanan::SETOR, 10000, '2026-06-01');
+        $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::SETOR, 20000, '2026-09-01');
+        $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::SETOR, 5000, '2026-09-30');
+        $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::TARIK, 7000, '2026-09-15');
+        $this->buatTransaksi($anggota, JenisSimpanan::WAJIB, TransaksiSimpanan::SETOR, 30000, '2026-11-12');
+
+        $tren = $this->actingAs($this->admin)->get(route('dashboard'))->viewData('trenBulanan');
+
+        $this->assertSame([
+            ['bulan' => 'Jun 2026', 'total_setor' => 10000.0, 'total_tarik' => 0.0],
+            ['bulan' => 'Jul 2026', 'total_setor' => 0.0, 'total_tarik' => 0.0],
+            ['bulan' => 'Agt 2026', 'total_setor' => 0.0, 'total_tarik' => 0.0],
+            ['bulan' => 'Sep 2026', 'total_setor' => 25000.0, 'total_tarik' => 7000.0],
+            ['bulan' => 'Okt 2026', 'total_setor' => 0.0, 'total_tarik' => 0.0],
+            ['bulan' => 'Nov 2026', 'total_setor' => 30000.0, 'total_tarik' => 0.0],
+        ], $tren->all());
+    }
+
+    public function test_belum_setor_wajib_bulan_ini(): void
+    {
+        $sudah = Anggota::factory()->create(['nama' => 'Sudah Wajib']);
+        $bulanLalu = Anggota::factory()->create(['nama' => 'Wajib Bulan Lalu']);
+        $hanyaPokok = Anggota::factory()->create(['nama' => 'Hanya Pokok']);
+        $nonaktif = Anggota::factory()->nonaktif()->create(['nama' => 'Nonaktif']);
+
+        $this->buatTransaksi($sudah, JenisSimpanan::WAJIB, TransaksiSimpanan::SETOR, 50000, '2026-11-02');
+        $this->buatTransaksi($bulanLalu, JenisSimpanan::WAJIB, TransaksiSimpanan::SETOR, 50000, '2026-10-20');
+        $this->buatTransaksi($hanyaPokok, JenisSimpanan::POKOK, TransaksiSimpanan::SETOR, 100000, '2026-11-03');
+
+        $response = $this->actingAs($this->admin)->get(route('dashboard'));
+
+        $daftar = $response->viewData('belumSetorWajib');
+
+        $this->assertSame(['Hanya Pokok', 'Wajib Bulan Lalu'], $daftar->pluck('nama')->all());
+        $this->assertFalse($daftar->contains('id', $sudah->id));
+        $this->assertFalse($daftar->contains('id', $nonaktif->id));
+        $response->assertViewHas('jumlahBelumSetorWajib', 2);
+        $response->assertSee(route('transaksi.setor.create', ['anggota_id' => $hanyaPokok->id]), false);
+    }
+
+    public function test_belum_setor_wajib_maksimal_sepuluh(): void
+    {
+        Anggota::factory()->count(12)->create();
+
+        $response = $this->actingAs($this->admin)->get(route('dashboard'));
+
+        $this->assertCount(10, $response->viewData('belumSetorWajib'));
+        $response->assertViewHas('jumlahBelumSetorWajib', 12);
+        $response->assertSee('Menampilkan 10 dari 12 anggota.');
+    }
+
+    public function test_aksi_cepat_tampil(): void
+    {
+        $response = $this->actingAs($this->admin)->get(route('dashboard'));
+
+        foreach (['anggota.create', 'transaksi.setor.create', 'transaksi.tarik.create', 'laporan.keseluruhan'] as $route) {
+            $response->assertSee('href="'.route($route).'"', false);
+        }
+    }
+
+    public function test_dashboard_tanpa_n_plus_satu(): void
+    {
+        $hitung = function (): int {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            $this->actingAs($this->admin)->get(route('dashboard'))->assertOk();
+            $jumlah = count(DB::getQueryLog());
+            DB::disableQueryLog();
+
+            return $jumlah;
+        };
+
+        $anggota = Anggota::factory()->create();
+        $this->buatTransaksi($anggota, JenisSimpanan::POKOK, TransaksiSimpanan::SETOR, 100000, '2026-11-01');
+        $sebelum = $hitung();
+
+        foreach (Anggota::factory()->count(5)->create() as $lain) {
+            $this->buatTransaksi($lain, JenisSimpanan::WAJIB, TransaksiSimpanan::SETOR, 50000, '2026-11-10');
+            $this->buatTransaksi($lain, JenisSimpanan::SUKARELA, TransaksiSimpanan::SETOR, 10000, '2026-09-10');
+        }
+
+        $this->assertSame($sebelum, $hitung());
     }
 
     public function test_rekap_per_jenis_benar_termasuk_jenis_kosong_dan_anggota_nonaktif(): void

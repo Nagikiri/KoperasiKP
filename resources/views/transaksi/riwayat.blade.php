@@ -24,7 +24,7 @@
             <option value="">Semua anggota</option>
             @foreach ($anggotaList as $anggota)
                 <option value="{{ $anggota->id }}" @selected($filter['anggota_id'] === (string) $anggota->id)>
-                    {{ $anggota->no_anggota }} - {{ $anggota->nama }}{{ $anggota->isAktif() ? '' : ' (nonaktif)' }}
+                    {{ $anggota->no_anggota }} - {{ Format::namaAnggota($anggota->nama, $anggota->status) }}
                 </option>
             @endforeach
         </select>
@@ -59,6 +59,7 @@
                     <th>Jumlah</th>
                     <th>Saldo Akhir</th>
                     <th>Dicatat Oleh</th>
+                    <th>Catatan</th>
                 </tr>
             </thead>
             <tbody>
@@ -66,12 +67,13 @@
                     <tr>
                         <td>{{ Format::tanggal($transaksi->tanggal_transaksi) }}</td>
                         <td>{{ $transaksi->anggota->no_anggota }}</td>
-                        <td>{{ $transaksi->anggota->nama }}</td>
+                        <td><x-nama-anggota :nama="$transaksi->anggota->nama" :status="$transaksi->anggota->status" /></td>
                         <td>{{ $transaksi->jenisSimpanan->nama_jenis }}</td>
                         <td>{{ ucfirst($transaksi->jenis_transaksi) }}</td>
                         <td>{{ Format::rupiah($transaksi->jumlah) }}</td>
                         <td>{{ Format::rupiah($transaksi->saldo_akhir) }}</td>
                         <td>{{ $transaksi->staff->nama }}</td>
+                        <td>{{ $transaksi->keterangan ?? '-' }}</td>
                     </tr>
                 @endforeach
             </tbody>

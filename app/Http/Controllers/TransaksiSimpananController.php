@@ -17,9 +17,7 @@ use Illuminate\View\View;
 
 class TransaksiSimpananController extends Controller
 {
-    public function __construct(private SimpananService $simpananService)
-    {
-    }
+    public function __construct(private SimpananService $simpananService) {}
 
     public function createSetor(Request $request): View
     {
@@ -45,6 +43,7 @@ class TransaksiSimpananController extends Controller
             $data['tanggal_transaksi'],
             (int) $request->user()->id,
             $data['kode_referensi'],
+            $data['keterangan'] ?? null,
         );
 
         if (! $transaksi->wasRecentlyCreated) {
@@ -55,7 +54,7 @@ class TransaksiSimpananController extends Controller
 
         return redirect()
             ->route('transaksi.riwayat')
-            ->with('success', "Setoran {$transaksi->jenisSimpanan->nama_jenis} sebesar " . Format::rupiah($transaksi->jumlah) . " untuk {$transaksi->anggota->nama} berhasil dicatat.");
+            ->with('success', "Setoran {$transaksi->jenisSimpanan->nama_jenis} sebesar ".Format::rupiah($transaksi->jumlah)." untuk {$transaksi->anggota->nama} berhasil dicatat.");
     }
 
     public function createTarik(Request $request): View
@@ -94,6 +93,7 @@ class TransaksiSimpananController extends Controller
             $data['tanggal_transaksi'],
             (int) $request->user()->id,
             $data['kode_referensi'],
+            $data['keterangan'] ?? null,
         );
 
         if (! $transaksi->wasRecentlyCreated) {
@@ -104,7 +104,7 @@ class TransaksiSimpananController extends Controller
 
         return redirect()
             ->route('transaksi.riwayat')
-            ->with('success', 'Penarikan Simpanan Sukarela sebesar ' . Format::rupiah($transaksi->jumlah) . " untuk {$transaksi->anggota->nama} berhasil dicatat.");
+            ->with('success', 'Penarikan Simpanan Sukarela sebesar '.Format::rupiah($transaksi->jumlah)." untuk {$transaksi->anggota->nama} berhasil dicatat.");
     }
 
     public function riwayat(Request $request): View

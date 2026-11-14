@@ -17,7 +17,13 @@
         <tr><th>Alamat</th><td>{{ $anggota->alamat ?? '-' }}</td></tr>
         <tr><th>No. Telepon</th><td>{{ $anggota->no_telepon ?? '-' }}</td></tr>
         <tr><th>Tanggal Bergabung</th><td>{{ Format::tanggal($anggota->tanggal_bergabung) }}</td></tr>
-        <tr><th>Status</th><td>{{ ucfirst($anggota->status) }}</td></tr>
+        <tr><th>Status</th><td><x-status-anggota :status="$anggota->status" /></td></tr>
+        @if (\App\Models\Anggota::perluKeteranganSaldo($anggota->status, $totalSaldo))
+            {{-- Revisi R5: nonaktif dengan saldo > 0. --}}
+            <tr>
+                <td colspan="2" data-keterangan-saldo-nonaktif style="font-style: italic; font-size: 0.85em; color: #b91c1c;">{{ \App\Models\Anggota::KETERANGAN_SALDO_NONAKTIF }}</td>
+            </tr>
+        @endif
     </table>
 
     <p>
@@ -62,6 +68,7 @@
                     <th>Jumlah</th>
                     <th>Saldo Akhir</th>
                     <th>Dicatat Oleh</th>
+                    <th>Catatan</th>
                 </tr>
             </thead>
             <tbody>
@@ -73,6 +80,7 @@
                         <td>{{ Format::rupiah($transaksi->jumlah) }}</td>
                         <td>{{ Format::rupiah($transaksi->saldo_akhir) }}</td>
                         <td>{{ $transaksi->staff->nama }}</td>
+                        <td>{{ $transaksi->keterangan ?? '-' }}</td>
                     </tr>
                 @endforeach
             </tbody>

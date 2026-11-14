@@ -26,5 +26,7 @@
                 {{ $slot }}
             </div>
         </div>
+
+        @include('partials.cegah-kirim-ganda')
     </body>
 </html>

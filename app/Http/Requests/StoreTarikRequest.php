@@ -32,6 +32,7 @@ class StoreTarikRequest extends FormRequest
             ],
             'jumlah' => ['required', 'integer', 'min:1', 'max:999999999999'],
             'tanggal_transaksi' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+            'keterangan' => ['nullable', 'string', 'max:255'],
         ];
     }
 

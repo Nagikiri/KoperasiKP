@@ -5,6 +5,10 @@
 
     <form method="POST" action="{{ route('anggota.store') }}">
         @csrf
+        <input type="hidden" name="kode_referensi" value="{{ $kodeReferensi }}">
+        @error('kode_referensi')
+            <p>{{ $message }}</p>
+        @enderror
 
         <div>
             <label for="nama">Nama</label>

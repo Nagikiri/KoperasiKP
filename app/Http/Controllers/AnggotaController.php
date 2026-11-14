@@ -7,9 +7,12 @@ use App\Http\Requests\UpdateAnggotaRequest;
 use App\Models\Anggota;
 use App\Models\JenisSimpanan;
 use App\Services\NomorAnggotaGenerator;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class AnggotaController extends Controller
@@ -22,8 +25,8 @@ class AnggotaController extends Controller
         $anggota = Anggota::query()
             ->when($search, function ($query, string $search) {
                 $query->where(function ($query) use ($search) {
-                    $query->where('nama', 'like', '%' . $search . '%')
-                        ->orWhere('no_anggota', 'like', '%' . $search . '%');
+                    $query->where('nama', 'like', '%'.$search.'%')
+                        ->orWhere('no_anggota', 'like', '%'.$search.'%');
                 });
             })
             ->orderBy('nama')
@@ -38,18 +41,45 @@ class AnggotaController extends Controller
 
     public function create(): View
     {
-        return view('anggota.create');
+        return view('anggota.create', [
+            'kodeReferensi' => (string) Str::uuid(),
+        ]);
     }
 
     public function store(StoreAnggotaRequest $request, NomorAnggotaGenerator $generator): RedirectResponse
     {
-        $anggota = DB::transaction(function () use ($request, $generator) {
-            return Anggota::create(array_merge($request->validated(), [
-                'no_anggota' => $generator->generate(),
-                'status' => Anggota::STATUS_AKTIF,
-            ]));
-        });
+        // BR-19: kiriman ganda (dicek sebelum validasi NIK unik di StoreAnggotaRequest).
+        if (($duplikat = $request->anggotaDuplikat()) !== null) {
+            return $this->redirectTersimpan($duplikat);
+        }
 
+        $data = $request->validated();
+
+        try {
+            $anggota = DB::transaction(function () use ($data, $generator) {
+                return Anggota::create(array_merge($data, [
+                    'no_anggota' => $generator->generate(),
+                    'status' => Anggota::STATUS_AKTIF,
+                ]));
+            });
+        } catch (UniqueConstraintViolationException $e) {
+            // Pengaman terakhir: dua kiriman lolos cek bersamaan.
+            if (($duplikat = Anggota::where('kode_referensi', $data['kode_referensi'])->first()) !== null) {
+                return $this->redirectTersimpan($duplikat);
+            }
+
+            if (Anggota::where('nik', $data['nik'])->exists()) {
+                throw ValidationException::withMessages(['nik' => StoreAnggotaRequest::PESAN_NIK_TERDAFTAR]);
+            }
+
+            throw $e;
+        }
+
+        return $this->redirectTersimpan($anggota);
+    }
+
+    private function redirectTersimpan(Anggota $anggota): RedirectResponse
+    {
         return redirect()
             ->route('anggota.show', $anggota)
             ->with('success', "Anggota {$anggota->nama} berhasil ditambahkan dengan nomor {$anggota->no_anggota}.");

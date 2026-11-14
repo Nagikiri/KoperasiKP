@@ -45,7 +45,7 @@ class UpdateAnggotaRequest extends StoreAnggotaRequest
             if ($tanggalBergabung->gt($tanggalPertama)) {
                 $validator->errors()->add(
                     'tanggal_bergabung',
-                    'Tanggal bergabung tidak boleh setelah transaksi pertama anggota (' . Format::tanggal($tanggalPertama) . ').'
+                    'Tanggal bergabung tidak boleh setelah transaksi pertama anggota ('.Format::tanggal($tanggalPertama).').'
                 );
             }
         });

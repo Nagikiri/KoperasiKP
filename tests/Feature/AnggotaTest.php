@@ -9,6 +9,7 @@ use App\Models\User;
 use Carbon\Carbon;
 use Database\Seeders\JenisSimpananSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class AnggotaTest extends TestCase
@@ -41,6 +42,91 @@ class AnggotaTest extends TestCase
         $this->post(route('anggota.store'), $this->dataValid())->assertRedirect(route('login'));
 
         $this->assertSame(0, Anggota::count());
+    }
+
+    // ---------------------------------------------------------------
+    // Revisi R1–R3 — kirim ganda tambah anggota
+    // ---------------------------------------------------------------
+
+    public function test_form_tambah_membuat_kode_referensi_uuid_baru(): void
+    {
+        $pertama = $this->actingAs($this->admin)->get(route('anggota.create'));
+        $kedua = $this->actingAs($this->admin)->get(route('anggota.create'));
+
+        $kode = $pertama->viewData('kodeReferensi');
+
+        $this->assertTrue(Str::isUuid($kode));
+        $this->assertNotSame($kode, $kedua->viewData('kodeReferensi'));
+        $pertama->assertSee('name="kode_referensi" value="'.$kode.'"', false);
+    }
+
+    public function test_tambah_dua_kali_dengan_kode_referensi_sama_hanya_tersimpan_sekali(): void
+    {
+        $data = $this->dataValid();
+
+        $this->actingAs($this->admin)->post(route('anggota.store'), $data);
+
+        $kedua = $this->actingAs($this->admin)
+            ->from(route('anggota.create'))
+            ->post(route('anggota.store'), $data);
+
+        $anggota = Anggota::firstOrFail();
+
+        $this->assertSame(1, Anggota::count());
+        $this->assertSame($data['kode_referensi'], $anggota->kode_referensi);
+        $kedua->assertRedirect(route('anggota.show', $anggota));
+        $kedua->assertSessionHas('success', 'Anggota Budi Santoso berhasil ditambahkan dengan nomor KSP-2026-0001.');
+        $kedua->assertSessionHasNoErrors();
+    }
+
+    public function test_tambah_tanpa_kode_referensi_atau_bukan_uuid_ditolak(): void
+    {
+        foreach ([null, '', 'bukan-uuid', '12345'] as $kode) {
+            $this->assertTambahDitolak(['kode_referensi' => $kode], 'kode_referensi');
+        }
+    }
+
+    public function test_nik_milik_anggota_lain_dengan_kode_referensi_baru_tetap_ditolak(): void
+    {
+        Anggota::factory()->create(['nik' => '3201234567890001']);
+
+        $this->actingAs($this->admin)
+            ->from(route('anggota.create'))
+            ->post(route('anggota.store'), $this->dataValid(['nik' => '3201234567890001']))
+            ->assertRedirect(route('anggota.create'))
+            ->assertSessionHasErrors(['nik' => 'NIK ini sudah terdaftar atas anggota lain.']);
+
+        $this->assertSame(1, Anggota::count());
+    }
+
+    public function test_semua_halaman_form_memuat_skrip_cegah_kirim_ganda(): void
+    {
+        $anggota = Anggota::factory()->create();
+
+        $this->get(route('login'))->assertSee('data-cegah-kirim-ganda', false);
+
+        $halaman = [
+            route('anggota.index'),
+            route('anggota.create'),
+            route('anggota.edit', $anggota),
+            route('transaksi.setor.create'),
+            route('transaksi.tarik.create'),
+            route('transaksi.riwayat'),
+            route('password.edit'),
+            route('laporan.anggota'),
+            route('laporan.keseluruhan'),
+        ];
+
+        foreach ($halaman as $url) {
+            $html = $this->actingAs($this->admin)->get($url)->assertOk()->getContent();
+
+            $this->assertSame(1, substr_count($html, 'data-cegah-kirim-ganda'), "Skrip harus tepat satu kali di {$url}.");
+        }
+
+        // Konfirmasi nonaktifkan tetap ada; skrip global mengabaikan submit yang dibatalkan.
+        $this->actingAs($this->admin)->get(route('anggota.index'))
+            ->assertSee("return confirm('Nonaktifkan anggota ini?", false)
+            ->assertSee('event.defaultPrevented', false);
     }
 
     public function test_halaman_daftar_tambah_dan_ubah_tampil(): void
@@ -405,6 +491,7 @@ class AnggotaTest extends TestCase
             'alamat' => 'Jl. Mawar No. 1, Balikpapan',
             'no_telepon' => '081234567890',
             'tanggal_bergabung' => '2026-11-01',
+            'kode_referensi' => (string) Str::uuid(),
         ], $override);
     }
 

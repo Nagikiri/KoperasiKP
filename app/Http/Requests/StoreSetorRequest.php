@@ -31,6 +31,7 @@ class StoreSetorRequest extends FormRequest
             'jenis_simpanan_id' => ['required', 'integer', 'exists:jenis_simpanan,id'],
             'jumlah' => ['required', 'integer', 'min:1', 'max:999999999999'],
             'tanggal_transaksi' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+            'keterangan' => ['nullable', 'string', 'max:255'],
         ];
     }
 

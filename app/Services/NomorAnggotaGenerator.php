@@ -12,15 +12,15 @@ class NomorAnggotaGenerator
      */
     public function generate(): string
     {
-        $prefix = 'KSP-' . now()->format('Y') . '-';
+        $prefix = 'KSP-'.now()->format('Y').'-';
 
-        $terakhir = Anggota::where('no_anggota', 'like', $prefix . '%')
+        $terakhir = Anggota::where('no_anggota', 'like', $prefix.'%')
             ->lockForUpdate()
             ->orderByDesc('no_anggota')
             ->value('no_anggota');
 
         $urut = $terakhir ? ((int) substr($terakhir, -4)) + 1 : 1;
 
-        return $prefix . str_pad((string) $urut, 4, '0', STR_PAD_LEFT);
+        return $prefix.str_pad((string) $urut, 4, '0', STR_PAD_LEFT);
     }
 }

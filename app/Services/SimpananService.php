@@ -54,17 +54,17 @@ class SimpananService
     /**
      * Catat setoran (FR-11). Berlaku untuk ketiga jenis simpanan (BR-06).
      */
-    public function setor(int $anggotaId, int $jenisSimpananId, int $jumlah, string $tanggal, int $staffId, ?string $kodeReferensi = null): TransaksiSimpanan
+    public function setor(int $anggotaId, int $jenisSimpananId, int $jumlah, string $tanggal, int $staffId, ?string $kodeReferensi = null, ?string $keterangan = null): TransaksiSimpanan
     {
-        return $this->catat(TransaksiSimpanan::SETOR, $anggotaId, $jenisSimpananId, $jumlah, $tanggal, $staffId, $kodeReferensi);
+        return $this->catat(TransaksiSimpanan::SETOR, $anggotaId, $jenisSimpananId, $jumlah, $tanggal, $staffId, $kodeReferensi, $keterangan);
     }
 
     /**
      * Catat penarikan (FR-12). Jenis selalu Simpanan Sukarela, ditentukan server (BR-06).
      */
-    public function tarik(int $anggotaId, int $jumlah, string $tanggal, int $staffId, ?string $kodeReferensi = null): TransaksiSimpanan
+    public function tarik(int $anggotaId, int $jumlah, string $tanggal, int $staffId, ?string $kodeReferensi = null, ?string $keterangan = null): TransaksiSimpanan
     {
-        return $this->catat(TransaksiSimpanan::TARIK, $anggotaId, JenisSimpanan::sukarela()->id, $jumlah, $tanggal, $staffId, $kodeReferensi);
+        return $this->catat(TransaksiSimpanan::TARIK, $anggotaId, JenisSimpanan::sukarela()->id, $jumlah, $tanggal, $staffId, $kodeReferensi, $keterangan);
     }
 
     /**
@@ -76,11 +76,11 @@ class SimpananService
      * dikembalikan adalah transaksi yang sudah ada, dengan
      * `wasRecentlyCreated === false` sebagai penanda duplikat.
      */
-    private function catat(string $jenisTransaksi, int $anggotaId, int $jenisSimpananId, int $jumlah, string $tanggal, int $staffId, ?string $kodeReferensi): TransaksiSimpanan
+    private function catat(string $jenisTransaksi, int $anggotaId, int $jenisSimpananId, int $jumlah, string $tanggal, int $staffId, ?string $kodeReferensi, ?string $keterangan = null): TransaksiSimpanan
     {
         try {
             return DB::transaction(fn () => $this->catatDalamTransaksi(
-                $jenisTransaksi, $anggotaId, $jenisSimpananId, $jumlah, $tanggal, $staffId, $kodeReferensi
+                $jenisTransaksi, $anggotaId, $jenisSimpananId, $jumlah, $tanggal, $staffId, $kodeReferensi, $keterangan
             ));
         } catch (UniqueConstraintViolationException $e) {
             // Pengaman terakhir: dua kiriman lolos cek bersamaan, unique index menolak yang kedua.
@@ -94,7 +94,7 @@ class SimpananService
         }
     }
 
-    private function catatDalamTransaksi(string $jenisTransaksi, int $anggotaId, int $jenisSimpananId, int $jumlah, string $tanggal, int $staffId, ?string $kodeReferensi): TransaksiSimpanan
+    private function catatDalamTransaksi(string $jenisTransaksi, int $anggotaId, int $jenisSimpananId, int $jumlah, string $tanggal, int $staffId, ?string $kodeReferensi, ?string $keterangan = null): TransaksiSimpanan
     {
         $anggota = Anggota::whereKey($anggotaId)->lockForUpdate()->firstOrFail();
 
@@ -102,7 +102,7 @@ class SimpananService
             return $sudahAda;
         }
 
-        return $this->simpanBaru($anggota, $jenisTransaksi, $jenisSimpananId, $jumlah, $tanggal, $staffId, $kodeReferensi);
+        return $this->simpanBaru($anggota, $jenisTransaksi, $jenisSimpananId, $jumlah, $tanggal, $staffId, $kodeReferensi, $keterangan);
     }
 
     private function cariByKodeReferensi(string $kodeReferensi): ?TransaksiSimpanan
@@ -110,7 +110,7 @@ class SimpananService
         return TransaksiSimpanan::where('kode_referensi', $kodeReferensi)->first();
     }
 
-    private function simpanBaru(Anggota $anggota, string $jenisTransaksi, int $jenisSimpananId, int $jumlah, string $tanggal, int $staffId, ?string $kodeReferensi): TransaksiSimpanan
+    private function simpanBaru(Anggota $anggota, string $jenisTransaksi, int $jenisSimpananId, int $jumlah, string $tanggal, int $staffId, ?string $kodeReferensi, ?string $keterangan = null): TransaksiSimpanan
     {
         if (! $anggota->isAktif()) {
             throw ValidationException::withMessages([
@@ -124,7 +124,7 @@ class SimpananService
 
         if ($jenisTransaksi === TransaksiSimpanan::TARIK && $jumlah > $saldo) {
             throw ValidationException::withMessages([
-                'jumlah' => 'Penarikan gagal. Saldo Simpanan Sukarela anggota ini hanya ' . Format::rupiah($saldo) . '.',
+                'jumlah' => 'Penarikan gagal. Saldo Simpanan Sukarela anggota ini hanya '.Format::rupiah($saldo).'.',
             ]);
         }
 
@@ -132,6 +132,7 @@ class SimpananService
 
         return TransaksiSimpanan::create([
             'kode_referensi' => $kodeReferensi,
+            'keterangan' => $keterangan,
             'anggota_id' => $anggota->id,
             'jenis_simpanan_id' => $jenisSimpananId,
             'staff_id' => $staffId,
@@ -153,7 +154,7 @@ class SimpananService
 
         if ($tanggalTransaksi->lt($tanggalBergabung)) {
             throw ValidationException::withMessages([
-                'tanggal_transaksi' => 'Tanggal transaksi tidak boleh sebelum tanggal bergabung anggota (' . Format::tanggal($tanggalBergabung) . ').',
+                'tanggal_transaksi' => 'Tanggal transaksi tidak boleh sebelum tanggal bergabung anggota ('.Format::tanggal($tanggalBergabung).').',
             ]);
         }
 
@@ -172,7 +173,7 @@ class SimpananService
             $namaJenis = JenisSimpanan::whereKey($jenisSimpananId)->value('nama_jenis');
 
             throw ValidationException::withMessages([
-                'tanggal_transaksi' => "Tanggal transaksi tidak boleh lebih awal dari transaksi terakhir {$namaJenis} anggota ini (" . Format::tanggal($tanggalTerakhir) . ').',
+                'tanggal_transaksi' => "Tanggal transaksi tidak boleh lebih awal dari transaksi terakhir {$namaJenis} anggota ini (".Format::tanggal($tanggalTerakhir).').',
             ]);
         }
     }

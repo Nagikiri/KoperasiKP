@@ -1,3 +1,24 @@
+@php
+    // Menu ringkas (revisi R1): grup Transaksi dan Laporan memakai komponen dropdown Breeze.
+    $menuTransaksi = [
+        ['route' => 'transaksi.setor.create', 'aktif' => 'transaksi.setor.*', 'label' => 'Setor'],
+        ['route' => 'transaksi.tarik.create', 'aktif' => 'transaksi.tarik.*', 'label' => 'Tarik'],
+        ['route' => 'transaksi.riwayat', 'aktif' => 'transaksi.riwayat', 'label' => 'Riwayat Transaksi'],
+    ];
+    $menuLaporan = [
+        ['route' => 'laporan.keseluruhan', 'aktif' => 'laporan.keseluruhan*', 'label' => 'Rekap Keseluruhan'],
+        ['route' => 'laporan.anggota', 'aktif' => 'laporan.anggota*', 'label' => 'Laporan per Anggota'],
+    ];
+    $grupMenu = [
+        ['label' => 'Transaksi', 'aktif' => request()->routeIs('transaksi.*'), 'item' => $menuTransaksi],
+        ['label' => 'Laporan', 'aktif' => request()->routeIs('laporan.*'), 'item' => $menuLaporan],
+    ];
+
+    $kelasPemicu = 'inline-flex items-center px-1 pt-1 h-16 border-b-2 text-sm font-medium leading-5 focus:outline-none transition duration-150 ease-in-out';
+    $kelasPemicuAktif = 'border-indigo-400 text-gray-900';
+    $kelasPemicuPasif = 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
+@endphp
+
 <nav x-data="{ open: false }" class="bg-white border-b border-gray-100">
     <!-- Primary Navigation Menu -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -13,20 +34,39 @@
                 <!-- Navigation Links -->
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
-                        {{ __('Dashboard') }}
+                        Dashboard
                     </x-nav-link>
                     <x-nav-link :href="route('anggota.index')" :active="request()->routeIs('anggota.*')">
                         Data Anggota
                     </x-nav-link>
-                    <x-nav-link :href="route('transaksi.setor.create')" :active="request()->routeIs('transaksi.setor.*')">
-                        Setor
-                    </x-nav-link>
-                    <x-nav-link :href="route('transaksi.tarik.create')" :active="request()->routeIs('transaksi.tarik.*')">
-                        Tarik
-                    </x-nav-link>
-                    <x-nav-link :href="route('transaksi.riwayat')" :active="request()->routeIs('transaksi.riwayat')">
-                        Riwayat Transaksi
-                    </x-nav-link>
+
+                    @foreach ($grupMenu as $grup)
+                        <div class="flex items-center" data-menu-grup="{{ $grup['label'] }}" data-menu-aktif="{{ $grup['aktif'] ? '1' : '0' }}">
+                            <x-dropdown align="left" width="48">
+                                <x-slot name="trigger">
+                                    <button type="button" class="{{ $kelasPemicu }} {{ $grup['aktif'] ? $kelasPemicuAktif : $kelasPemicuPasif }}">
+                                        <div>{{ $grup['label'] }}</div>
+                                        <div class="ms-1">
+                                            <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                            </svg>
+                                        </div>
+                                    </button>
+                                </x-slot>
+
+                                <x-slot name="content">
+                                    @foreach ($grup['item'] as $item)
+                                        @php($itemAktif = request()->routeIs($item['aktif']))
+                                        <x-dropdown-link :href="route($item['route'])"
+                                                         :class="$itemAktif ? 'font-semibold bg-gray-100' : ''"
+                                                         :aria-current="$itemAktif ? 'page' : null">
+                                            {{ $item['label'] }}
+                                        </x-dropdown-link>
+                                    @endforeach
+                                </x-slot>
+                            </x-dropdown>
+                        </div>
+                    @endforeach
                 </div>
             </div>
 
@@ -80,20 +120,22 @@
     <div :class="{'block': open, 'hidden': ! open}" class="hidden sm:hidden">
         <div class="pt-2 pb-3 space-y-1">
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
-                {{ __('Dashboard') }}
+                Dashboard
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('anggota.index')" :active="request()->routeIs('anggota.*')">
                 Data Anggota
             </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('transaksi.setor.create')" :active="request()->routeIs('transaksi.setor.*')">
-                Setor
-            </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('transaksi.tarik.create')" :active="request()->routeIs('transaksi.tarik.*')">
-                Tarik
-            </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('transaksi.riwayat')" :active="request()->routeIs('transaksi.riwayat')">
-                Riwayat Transaksi
-            </x-responsive-nav-link>
+
+            @foreach ($grupMenu as $grup)
+                <div class="pt-2 px-4 text-xs font-semibold uppercase tracking-widest {{ $grup['aktif'] ? 'text-indigo-700' : 'text-gray-400' }}">
+                    {{ $grup['label'] }}
+                </div>
+                @foreach ($grup['item'] as $item)
+                    <x-responsive-nav-link :href="route($item['route'])" :active="request()->routeIs($item['aktif'])">
+                        {{ $item['label'] }}
+                    </x-responsive-nav-link>
+                @endforeach
+            @endforeach
         </div>
 
         <!-- Responsive Settings Options -->

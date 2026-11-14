@@ -498,7 +498,7 @@ class TransaksiSimpananTest extends TestCase
             }
 
             if (array_intersect(['PUT', 'PATCH', 'DELETE'], $route->methods())) {
-                $terlarang[] = implode('|', $route->methods()) . ' ' . $route->uri();
+                $terlarang[] = implode('|', $route->methods()).' '.$route->uri();
             }
         }
 
@@ -653,9 +653,13 @@ class TransaksiSimpananTest extends TestCase
 
     public function test_tombol_simpan_dinonaktifkan_setelah_klik_pertama(): void
     {
+        // Revisi 04 R2: penonaktif tombol dipindah ke skrip global di layout; skrip per form dihapus.
         foreach (['transaksi.setor.create', 'transaksi.tarik.create'] as $route) {
-            $this->actingAs($this->admin)->get(route($route))
-                ->assertSee("this.querySelector('button[type=submit]').disabled = true;", false);
+            $html = $this->actingAs($this->admin)->get(route($route))->assertOk()->getContent();
+
+            $this->assertSame(1, substr_count($html, 'data-cegah-kirim-ganda'));
+            $this->assertStringNotContainsString('onsubmit=', $html);
+            $this->assertStringContainsString("getElementById('jumlah')", $html);
         }
     }
 
@@ -777,5 +781,104 @@ class TransaksiSimpananTest extends TestCase
     {
         $this->actingAs($this->admin)->get(route('transaksi.tarik.create'))
             ->assertSee('Penarikan hanya untuk Simpanan Sukarela. Simpanan Pokok dan Wajib dikembalikan saat anggota keluar dari koperasi.');
+    }
+
+    // ---------------------------------------------------------------
+    // Revisi 04 R10 — catatan transaksi (keterangan)
+    // ---------------------------------------------------------------
+
+    public function test_form_setor_dan_tarik_punya_input_catatan(): void
+    {
+        foreach (['transaksi.setor.create', 'transaksi.tarik.create'] as $route) {
+            $this->actingAs($this->admin)->get(route($route))
+                ->assertSee('name="keterangan"', false)
+                ->assertSee('Catatan (opsional)');
+        }
+    }
+
+    public function test_catatan_tersimpan_dan_tampil_di_riwayat_dan_detail(): void
+    {
+        $anggota = Anggota::factory()->create();
+
+        $this->actingAs($this->admin)->post(route('transaksi.setor.store'), [
+            'kode_referensi' => (string) Str::uuid(),
+            'anggota_id' => $anggota->id,
+            'jenis_simpanan_id' => $this->sukarela->id,
+            'jumlah' => '200.000',
+            'tanggal_transaksi' => '2026-11-10',
+            'keterangan' => 'Setoran lewat kas kantor',
+        ])->assertRedirect(route('transaksi.riwayat'));
+
+        $this->actingAs($this->admin)->post(route('transaksi.tarik.store'), [
+            'kode_referensi' => (string) Str::uuid(),
+            'anggota_id' => $anggota->id,
+            'jumlah' => '50.000',
+            'tanggal_transaksi' => '2026-11-11',
+            'keterangan' => 'Biaya sekolah anak',
+        ])->assertRedirect(route('transaksi.riwayat'));
+
+        // Tanpa catatan tetap boleh.
+        $this->actingAs($this->admin)->post(route('transaksi.setor.store'), [
+            'kode_referensi' => (string) Str::uuid(),
+            'anggota_id' => $anggota->id,
+            'jenis_simpanan_id' => $this->pokok->id,
+            'jumlah' => '100000',
+            'tanggal_transaksi' => '2026-11-11',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame(
+            ['Setoran lewat kas kantor', 'Biaya sekolah anak', null],
+            TransaksiSimpanan::orderBy('id')->pluck('keterangan')->all(),
+        );
+
+        foreach ([route('transaksi.riwayat'), route('anggota.show', $anggota)] as $url) {
+            $this->actingAs($this->admin)->get($url)
+                ->assertSee('Catatan')
+                ->assertSee('Setoran lewat kas kantor')
+                ->assertSee('Biaya sekolah anak');
+        }
+    }
+
+    public function test_catatan_lebih_dari_255_karakter_ditolak(): void
+    {
+        $anggota = Anggota::factory()->create();
+        $this->service->setor($anggota->id, $this->sukarela->id, 100000, '2026-11-01', $this->admin->id);
+
+        $this->actingAs($this->admin)
+            ->from(route('transaksi.setor.create'))
+            ->post(route('transaksi.setor.store'), [
+                'kode_referensi' => (string) Str::uuid(),
+                'anggota_id' => $anggota->id,
+                'jenis_simpanan_id' => $this->pokok->id,
+                'jumlah' => '100000',
+                'tanggal_transaksi' => '2026-11-10',
+                'keterangan' => str_repeat('a', 256),
+            ])
+            ->assertRedirect(route('transaksi.setor.create'))
+            ->assertSessionHasErrors(['keterangan' => 'Catatan tidak boleh lebih dari 255 karakter.']);
+
+        $this->actingAs($this->admin)
+            ->from(route('transaksi.tarik.create'))
+            ->post(route('transaksi.tarik.store'), [
+                'kode_referensi' => (string) Str::uuid(),
+                'anggota_id' => $anggota->id,
+                'jumlah' => '1000',
+                'tanggal_transaksi' => '2026-11-10',
+                'keterangan' => str_repeat('a', 256),
+            ])
+            ->assertRedirect(route('transaksi.tarik.create'))
+            ->assertSessionHasErrors('keterangan');
+
+        $this->assertSame(1, TransaksiSimpanan::count());
+
+        // Tepat 255 karakter diterima.
+        $this->actingAs($this->admin)->post(route('transaksi.setor.store'), [
+            'kode_referensi' => (string) Str::uuid(),
+            'anggota_id' => $anggota->id,
+            'jenis_simpanan_id' => $this->pokok->id,
+            'jumlah' => '100000',
+            'tanggal_transaksi' => '2026-11-10',
+            'keterangan' => str_repeat('a', 255),
+        ])->assertSessionHasNoErrors();
     }
 }

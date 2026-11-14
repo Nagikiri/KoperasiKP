@@ -13,10 +13,21 @@ class Anggota extends Model
 
     public const STATUS_NONAKTIF = 'nonaktif';
 
+    /**
+     * Keterangan untuk anggota nonaktif yang saldonya masih > 0 (revisi R5).
+     */
+    public const KETERANGAN_SALDO_NONAKTIF = 'Anggota nonaktif. Saldo simpanan masih tercatat dan belum dikembalikan.';
+
+    public static function perluKeteranganSaldo(string $status, float $totalSaldo): bool
+    {
+        return $status !== self::STATUS_AKTIF && $totalSaldo > 0;
+    }
+
     // WAJIB dideklarasikan agar Eloquent tidak mencari tabel 'anggotas'
     protected $table = 'anggota';
 
     protected $fillable = [
+        'kode_referensi',
         'no_anggota',
         'nama',
         'nik',
