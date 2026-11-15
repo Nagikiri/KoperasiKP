@@ -5,14 +5,6 @@
 <x-app-layout>
     <h1>Riwayat Transaksi</h1>
 
-    @if (session('success'))
-        <p>{{ session('success') }}</p>
-    @endif
-
-    @if (session('info'))
-        <p>{{ session('info') }}</p>
-    @endif
-
     <p>
         <a href="{{ route('transaksi.setor.create') }}">Setor</a>
         <a href="{{ route('transaksi.tarik.create') }}">Tarik</a>

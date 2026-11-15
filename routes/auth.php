@@ -15,7 +15,7 @@ Route::middleware('auth')->group(function () {
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])
         ->name('logout');
 
-    Route::get('ganti-password', [PasswordController::class, 'edit'])
+    Route::get('pengaturan-akun', [PasswordController::class, 'edit'])
         ->name('password.edit');
 
     Route::put('password', [PasswordController::class, 'update'])

@@ -22,9 +22,10 @@ class TampilanAnggotaNonaktifTest extends TestCase
 {
     use RefreshDatabase;
 
-    private const PENANDA = '<span data-penanda-nonaktif style="color: #b91c1c; font-weight: bold;">(Nonaktif)</span>';
+    // F1 §3.12: jangkar atribut data-status-anggota (pola regex), bukan markup/gaya utuh.
+    private const PENANDA = '<span[^>]*data-status-anggota="nonaktif"[^>]*>\(Nonaktif\)<\/span>';
 
-    private const STATUS_MERAH = '<span data-status-anggota="nonaktif" style="color: #b91c1c; font-weight: bold;">Nonaktif</span>';
+    private const STATUS_MERAH = '<span[^>]*data-status-anggota="nonaktif"[^>]*>Nonaktif<\/span>';
 
     private User $admin;
 
@@ -63,7 +64,7 @@ class TampilanAnggotaNonaktifTest extends TestCase
             $html = $this->html($url);
 
             $this->assertStringContainsString('Andi Pratama Wijaya', $html);
-            $this->assertStringContainsString(self::STATUS_MERAH, $html);
+            $this->assertMatchesRegularExpression('/'.self::STATUS_MERAH.'/', $html);
         }
     }
 
@@ -71,13 +72,13 @@ class TampilanAnggotaNonaktifTest extends TestCase
     {
         $html = $this->html(route('transaksi.riwayat'));
 
-        $this->assertStringContainsString('Andi Pratama Wijaya '.self::PENANDA, $html);
+        $this->assertMatchesRegularExpression('/Andi Pratama Wijaya '.self::PENANDA.'/', $html);
         $this->assertStringContainsString("{$this->andi->no_anggota} - Andi Pratama Wijaya (Nonaktif)", $html);
     }
 
     public function test_dashboard_transaksi_terbaru_menandai_nonaktif(): void
     {
-        $this->assertStringContainsString('Andi Pratama Wijaya '.self::PENANDA, $this->html(route('dashboard')));
+        $this->assertMatchesRegularExpression('/Andi Pratama Wijaya '.self::PENANDA.'/', $this->html(route('dashboard')));
     }
 
     public function test_laporan_keseluruhan_pratinjau_dan_pdf_menandai_nonaktif(): void
@@ -91,7 +92,7 @@ class TampilanAnggotaNonaktifTest extends TestCase
         foreach ([$pratinjau, $pdf] as $html) {
             // Tabel saldo anggota: kolom status merah (kelas laporan seragam). Tabel transaksi: nama + penanda.
             $this->assertMatchesRegularExpression('/<td>Andi Pratama Wijaya<\/td>\s*<td class="lap-tengah lap-merah">Nonaktif<\/td>/', $html);
-            $this->assertStringContainsString('Andi Pratama Wijaya '.self::PENANDA, $html);
+            $this->assertMatchesRegularExpression('/Andi Pratama Wijaya '.self::PENANDA.'/', $html);
         }
     }
 
@@ -110,6 +111,46 @@ class TampilanAnggotaNonaktifTest extends TestCase
             // Pita judul blok: nama lengkap + status Nonaktif merah (revisi R6).
             $this->assertMatchesRegularExpression('/<td data-pita-judul>\d+\. '.preg_quote($this->andi->no_anggota, '/').' — Andi Pratama Wijaya.*Status: <span class="lap-merah">Nonaktif<\/span><\/td>/', $html);
         }
+    }
+
+    /**
+     * F1 §7.1c: PDF dirender dompdf tanpa Tailwind, jadi penanda nonaktif wajib tetap merah lewat style inline.
+     */
+    public function test_penanda_nonaktif_di_pdf_tetap_inline_merah(): void
+    {
+        // PDF laporan keseluruhan: penanda dari x-nama-anggota di tabel transaksi.
+        $keseluruhan = app(LaporanService::class)->keseluruhan([]) + ['dicetak_oleh' => 'Admin Koperasi'];
+        $dom = new \DOMDocument;
+        libxml_use_internal_errors(true);
+        $dom->loadHTML('<?xml encoding="UTF-8">'.view('laporan.pdf-keseluruhan', $keseluruhan)->render());
+        libxml_clear_errors();
+        $xpath = new \DOMXPath($dom);
+
+        $penanda = $xpath->query('//*[@data-status-anggota="nonaktif"]');
+        $this->assertGreaterThan(0, $penanda->length);
+
+        $cocok = 0;
+        foreach ($penanda as $elemen) {
+            $style = $elemen->getAttribute('style');
+            $this->assertStringContainsString('color: #b91c1c', $style, 'Setiap penanda nonaktif di PDF wajib merah inline.');
+            $this->assertStringContainsString('font-weight: bold', $style);
+
+            $baris = $xpath->query('ancestor::tr[1]', $elemen)->item(0);
+            if (str_contains($elemen->textContent, '(Nonaktif)')
+                && $baris !== null
+                && str_contains($baris->textContent, 'Andi Pratama Wijaya')) {
+                $cocok++;
+            }
+        }
+        $this->assertGreaterThan(0, $cocok, 'Penanda "(Nonaktif)" harus berada di baris yang sama dengan nama Andi.');
+
+        // PDF laporan per anggota: partial tidak memakai komponen; penanda lama tetap utuh.
+        $perAnggota = app(LaporanService::class)->perAnggota([]) + ['dicetak_oleh' => 'Admin Koperasi'];
+        $this->assertMatchesRegularExpression(
+            '/<td data-pita-judul>[^<]*Andi Pratama Wijaya.*Status: <span class="lap-merah">Nonaktif<\/span><\/td>/',
+            view('laporan.pdf', $perAnggota)->render(),
+        );
+        $this->assertStringContainsString('.lap-merah { color: #b91c1c; font-weight: bold; }', view('laporan.partials.gaya')->render());
     }
 
     // ---------------------------------------------------------------

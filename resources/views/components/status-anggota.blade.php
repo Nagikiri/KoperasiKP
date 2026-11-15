@@ -1,4 +1,4 @@
-{{-- Status anggota berwarna (00 §4.7): Aktif hijau, Nonaktif merah. Gaya inline agar tampil juga di PDF. --}}
+{{-- Status anggota sebagai badge (F1 §3.12): Aktif hijau, Nonaktif merah. Jangkar test: data-status-anggota. --}}
 @props(['status'])
 @php($aktif = $status === \App\Models\Anggota::STATUS_AKTIF)
-<span data-status-anggota="{{ $status }}" style="color: {{ $aktif ? '#15803d' : '#b91c1c' }}; font-weight: bold;">{{ $aktif ? 'Aktif' : 'Nonaktif' }}</span>
+<x-ui.badge :tone="$aktif ? 'success' : 'danger'" data-status-anggota="{{ $status }}">{{ $aktif ? 'Aktif' : 'Nonaktif' }}</x-ui.badge>

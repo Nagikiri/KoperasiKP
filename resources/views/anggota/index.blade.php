@@ -1,14 +1,6 @@
 <x-app-layout>
     <h1>Data Anggota</h1>
 
-    @if (session('success'))
-        <p>{{ session('success') }}</p>
-    @endif
-
-    @if (session('info'))
-        <p>{{ session('info') }}</p>
-    @endif
-
     <form method="GET" action="{{ route('anggota.index') }}">
         <label for="search">Cari nama / no. anggota</label>
         <input id="search" type="text" name="search" value="{{ $search }}">

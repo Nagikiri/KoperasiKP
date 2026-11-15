@@ -5,10 +5,6 @@
 <x-app-layout>
     <h1>Detail Anggota</h1>
 
-    @if (session('success'))
-        <p>{{ session('success') }}</p>
-    @endif
-
     <h2>Identitas</h2>
     <table>
         <tr><th>No. Anggota</th><td>{{ $anggota->no_anggota }}</td></tr>

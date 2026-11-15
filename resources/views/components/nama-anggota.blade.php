@@ -1,3 +1,6 @@
-{{-- Nama lengkap anggota + penanda "(Nonaktif)" merah bila nonaktif (BR-21). --}}
+{{--
+    Nama lengkap anggota + penanda "(Nonaktif)" bila nonaktif (BR-21, F1 §3.12).
+    Dipakai juga di PDF (dompdf, tanpa Tailwind): warna merah penanda wajib lewat style inline.
+--}}
 @props(['nama', 'status'])
-{{ $nama }}@if ($status !== \App\Models\Anggota::STATUS_AKTIF) <span data-penanda-nonaktif style="color: #b91c1c; font-weight: bold;">(Nonaktif)</span>@endif
+@if ($status === \App\Models\Anggota::STATUS_AKTIF)<span data-status-anggota="aktif">{{ $nama }}</span>@else{{ $nama }} <span data-status-anggota="nonaktif" class="ml-1 inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs" style="color: #b91c1c; font-weight: bold;">(Nonaktif)</span>@endif

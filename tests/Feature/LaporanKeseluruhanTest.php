@@ -150,22 +150,26 @@ class LaporanKeseluruhanTest extends TestCase
         $this->assertEquals(475000, $laporan['total']['saldo_akhir_periode']);
     }
 
-    public function test_navigasi_ringkas_dengan_dropdown_transaksi_dan_laporan(): void
+    public function test_sidebar_berkelompok_menandai_grup_dan_item_aktif(): void
     {
         $html = $this->actingAs($this->admin)->get(route('laporan.keseluruhan'))->getContent();
 
-        foreach (['Dashboard', 'Data Anggota', 'Setor', 'Tarik', 'Riwayat Transaksi', 'Rekap Keseluruhan', 'Laporan per Anggota', 'Ganti Password', 'Keluar'] as $label) {
+        foreach (['Dashboard', 'Data Anggota', 'Setor', 'Tarik', 'Riwayat Transaksi', 'Rekap Keseluruhan', 'Laporan per Anggota', 'Pengaturan Akun', 'Keluar'] as $label) {
             $this->assertStringContainsString($label, $html);
         }
 
-        $this->assertStringContainsString('data-menu-grup="Transaksi" data-menu-aktif="0"', $html);
         $this->assertStringContainsString('data-menu-grup="Laporan" data-menu-aktif="1"', $html);
+        $this->assertStringContainsString('data-menu-grup="Transaksi" data-menu-aktif="0"', $html);
+        $this->assertStringContainsString('data-menu-grup="Anggota" data-menu-aktif="0"', $html);
         $this->assertStringNotContainsString('data-menu-grup="Transaksi" data-menu-aktif="1"', $html);
         $this->assertMatchesRegularExpression('/href="'.preg_quote(route('laporan.keseluruhan'), '/').'"[^>]*aria-current="page"/', $html);
         $this->assertStringNotContainsString('Rekap Simpanan', $html);
 
         $setor = $this->actingAs($this->admin)->get(route('transaksi.setor.create'))->getContent();
         $this->assertStringContainsString('data-menu-grup="Transaksi" data-menu-aktif="1"', $setor);
+
+        $anggota = $this->actingAs($this->admin)->get(route('anggota.index'))->getContent();
+        $this->assertStringContainsString('data-menu-grup="Anggota" data-menu-aktif="1"', $anggota);
     }
 
     public function test_route_rekap_lama_sudah_dihapus(): void

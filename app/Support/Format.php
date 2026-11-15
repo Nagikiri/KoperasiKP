@@ -22,6 +22,18 @@ class Format
     }
 
     /**
+     * Contoh: `Senin, 16 November 2026` (topbar, F1 §4.2).
+     */
+    public static function hariTanggal($tanggal): string
+    {
+        if ($tanggal === null) {
+            return '-';
+        }
+
+        return Carbon::parse($tanggal)->translatedFormat('l, j F Y');
+    }
+
+    /**
      * Contoh: `12 November 2026 14.30 WITA`.
      */
     public static function tanggalWaktu($waktu): string
