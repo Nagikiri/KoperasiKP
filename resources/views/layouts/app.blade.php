@@ -50,7 +50,7 @@
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
-    <body class="font-sans antialiased bg-stone-100 text-stone-900">
+    <body class="font-sans antialiased bg-latar text-stone-900">
         @include('layouts.partials.sidebar', ['menu' => $menu])
 
         <div class="ml-64 min-h-screen min-w-0">

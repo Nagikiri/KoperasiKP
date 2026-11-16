@@ -68,7 +68,8 @@ class DashboardTest extends TestCase
         $response->assertOk();
         // Baru bulan ini = tanggal_bergabung di bulan berjalan, aktif maupun nonaktif.
         $response->assertViewHas('ringkasanAnggota', ['aktif' => 3, 'nonaktif' => 1, 'baru_bulan_ini' => 3]);
-        $response->assertSee('3 anggota baru bulan ini');
+        $response->assertSee('3 baru bulan ini');
+        $response->assertSee('1 nonaktif');
     }
 
     public function test_aktivitas_hari_ini_dan_bulan_ini(): void
@@ -139,7 +140,43 @@ class DashboardTest extends TestCase
 
         $this->assertCount(10, $response->viewData('belumSetorWajib'));
         $response->assertViewHas('jumlahBelumSetorWajib', 12);
-        $response->assertSee('Menampilkan 10 dari 12 anggota.');
+
+        // F2c E: sisa ditampilkan sebagai tautan ke form setor (tanpa anggota).
+        $tautan = $this->xpath($response->getContent())->query('//a[@data-lihat-lainnya]')->item(0);
+        $this->assertSame('Lihat 2 lainnya', trim($tautan->textContent));
+        $this->assertSame(route('transaksi.setor.create'), $tautan->getAttribute('href'));
+        $response->assertDontSee('Menampilkan 10 dari 12 anggota.');
+    }
+
+    public function test_kartu_belum_setor_wajib_judul_bulan_badge_dan_kaki(): void
+    {
+        Anggota::factory()->count(2)->create();
+
+        $response = $this->actingAs($this->admin)->get(route('dashboard'));
+        $xpath = $this->xpath($response->getContent());
+        $kartu = $xpath->query('//*[@data-kartu-tindak-lanjut]')->item(0);
+
+        $this->assertSame('Belum setor wajib', trim($xpath->query('.//h2', $kartu)->item(0)->textContent));
+        $this->assertSame('Bulan November', trim($xpath->query('.//*[@data-bulan-berjalan]', $kartu)->item(0)->textContent));
+        $badge = $xpath->query('.//*[@data-jumlah-belum-setor]', $kartu)->item(0);
+        $this->assertSame('2 anggota', trim($badge->textContent));
+        $this->assertStringContainsString('bg-amber-50', $badge->getAttribute('class'));
+        $this->assertStringContainsString('Daftar ini hanya pengingat.', $kartu->textContent);
+        $this->assertSame(0, $xpath->query('.//a[@data-lihat-lainnya]', $kartu)->length);
+
+        foreach (['Perlu ditindaklanjuti', 'Belum setor wajib bulan ini</h3>', 'Informasi saja.'] as $lama) {
+            $response->assertDontSee($lama, false);
+        }
+    }
+
+    public function test_kartu_belum_setor_wajib_kosong_dengan_badge_nol(): void
+    {
+        $xpath = $this->xpath($this->actingAs($this->admin)->get(route('dashboard'))->getContent());
+        $kartu = $xpath->query('//*[@data-kartu-tindak-lanjut]')->item(0);
+
+        $this->assertSame('0 anggota', trim($xpath->query('.//*[@data-jumlah-belum-setor]', $kartu)->item(0)->textContent));
+        $this->assertStringContainsString('Semua anggota aktif sudah setor wajib bulan ini.', $kartu->textContent);
+        $this->assertSame(1, $xpath->query('.//svg[contains(@class,"text-setor")]', $kartu)->length);
     }
 
     public function test_aksi_cepat_tampil(): void
@@ -175,8 +212,8 @@ class DashboardTest extends TestCase
         $response->assertSee('id="grafik-arus"', false);
         $response->assertSee('<script type="application/json" id="data-grafik">', false);
         $response->assertSee('role="group" aria-label="Periode"', false);
-        $response->assertSee('Lihat angka');
-        $response->assertDontSee('Grafik muncul setelah transaksi pertama dicatat.');
+        $response->assertSee('Tampilkan tabel');
+        $response->assertDontSee('Grafik akan terisi setelah ada setoran atau penarikan.');
 
         $xpath = $this->xpath($response->getContent());
         $data = json_decode($xpath->query('//script[@id="data-grafik"]')->item(0)->textContent, true);
@@ -201,13 +238,19 @@ class DashboardTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Belum ada transaksi');
-        $response->assertSee('Grafik muncul setelah transaksi pertama dicatat.');
+        $response->assertSee('Grafik akan terisi setelah ada setoran atau penarikan.');
         $response->assertDontSee('id="grafik-arus"', false);
         $response->assertDontSee('id="data-grafik"', false);
         $response->assertDontSee('aria-label="Periode"', false);
-        $response->assertDontSee('Lihat angka');
+        $response->assertDontSee('Tampilkan tabel');
 
-        $response->assertSee('Belum ada saldo tercatat.');
+        // Kaki grafik tetap ada, hanya berisi tautan laporan (F2c I.6).
+        $xpath = $this->xpath($response->getContent());
+        $this->assertSame(1, $xpath->query('//*[@data-kaki-grafik]//a[@data-tautan-rekap]')->length);
+        $this->assertSame(0, $xpath->query('//*[@data-tombol-tabel]')->length);
+        $this->assertSame(0, $xpath->query('//*[@data-baris-kontrol]')->length);
+
+        $response->assertSee('Belum ada simpanan.');
         $response->assertDontSee('id="grafik-komposisi"', false);
         $response->assertDontSee('id="data-komposisi"', false);
     }
@@ -221,7 +264,7 @@ class DashboardTest extends TestCase
         $response = $this->actingAs($this->admin)->get(route('dashboard'));
 
         $this->assertFalse($response->viewData('grafikArus')['ada_data']);
-        $response->assertSee('Grafik muncul setelah transaksi pertama dicatat.');
+        $response->assertSee('Grafik akan terisi setelah ada setoran atau penarikan.');
         $response->assertDontSee('id="grafik-arus"', false);
         $response->assertDontSee('id="data-grafik"', false);
         // Saldo > 0: donat komposisi tetap dirender.
@@ -250,15 +293,15 @@ class DashboardTest extends TestCase
         $this->buatTransaksi($sudah, JenisSimpanan::SUKARELA, TransaksiSimpanan::SETOR, 20000, '2026-11-12');
 
         $this->actingAs($this->admin)->get(route('dashboard'))
-            ->assertSee('2 transaksi tercatat hari ini.')
+            ->assertSee('Hari ini sudah ada 2 transaksi.')
             ->assertDontSee('Belum ada transaksi hari ini.');
 
         // 1. Belum setor wajib didahulukan.
         Anggota::factory()->create();
 
         $this->actingAs($this->admin)->get(route('dashboard'))
-            ->assertSee('1 anggota belum setor wajib bulan ini.')
-            ->assertDontSee('2 transaksi tercatat hari ini.');
+            ->assertSee('Ada 1 anggota yang belum setor wajib bulan ini.')
+            ->assertDontSee('Hari ini sudah ada 2 transaksi.');
     }
 
     public function test_data_komposisi_berisi_tiga_jenis_saat_saldo_lebih_dari_nol(): void
@@ -270,7 +313,10 @@ class DashboardTest extends TestCase
         $response = $this->actingAs($this->admin)->get(route('dashboard'));
 
         $response->assertSee('id="grafik-komposisi"', false);
-        $response->assertDontSee('Belum ada saldo tercatat.');
+        $response->assertSee('Sebaran simpanan');
+        $response->assertDontSee('Komposisi saldo');
+        $response->assertDontSee('Per jenis simpanan');
+        $response->assertDontSee('Belum ada simpanan.');
 
         $xpath = $this->xpath($response->getContent());
         $data = json_decode($xpath->query('//script[@id="data-komposisi"]')->item(0)->textContent, true);
@@ -278,14 +324,89 @@ class DashboardTest extends TestCase
         $this->assertSame([JenisSimpanan::POKOK, JenisSimpanan::WAJIB, JenisSimpanan::SUKARELA], array_column($data, 'nama_jenis'));
         $this->assertEquals([100000, 0, 300000], array_column($data, 'saldo'));
 
-        // Persen 1 desimal di daftar.
+        // Persen 1 desimal di daftar; nama jenis tanpa kata "Simpanan" (F2c C.4).
         $daftar = $xpath->query('//*[@data-daftar-komposisi]')->item(0)->textContent;
-        foreach (['25,0%', '0,0%', '75,0%', 'Rp 100.000', 'Rp 300.000'] as $teks) {
+        foreach (['Pokok', 'Wajib', 'Sukarela', '25,0%', '0,0%', '75,0%', 'Rp 100.000', 'Rp 300.000'] as $teks) {
             $this->assertStringContainsString($teks, $daftar);
         }
+        $this->assertStringNotContainsString('Simpanan', $daftar);
         // Total di tengah donat.
-        $response->assertSee('Rp 400.000');
-        $response->assertSee('Total saldo');
+        $kartu = $xpath->query('//*[@data-kartu-komposisi]')->item(0)->textContent;
+        $this->assertStringContainsString('Rp 400.000', $kartu);
+        $this->assertStringContainsString('Total simpanan', $kartu);
+        $this->assertStringNotContainsString('Total saldo', $kartu);
+    }
+
+    public function test_kepala_grafik_kontrol_satu_baris_chip_dan_kaki_grafik(): void
+    {
+        $anggota = Anggota::factory()->create(['tanggal_bergabung' => '2026-01-01']);
+        $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::SETOR, 500000, '2026-08-10');
+        $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::TARIK, 100000, '2026-10-10');
+
+        $response = $this->actingAs($this->admin)->get(route('dashboard'));
+        $xpath = $this->xpath($response->getContent());
+
+        // Kepala: label tanpa nama periode, chip "dalam 6 bulan" (periode default).
+        // Teks kartu tanpa isi <script> JSON (yang memang memuat nama periode).
+        $teksKartu = '';
+        foreach ($xpath->query('//*[@data-kartu-arus]//text()[not(ancestor::script)]') as $teks) {
+            $teksKartu .= ' '.$teks->textContent;
+        }
+        $teksKartu = preg_replace('/\s+/', ' ', $teksKartu);
+        $this->assertStringContainsString('Saldo simpanan', $teksKartu);
+        $this->assertStringNotContainsString('6 bulan terakhir', $teksKartu);
+        $this->assertSame('+Rp 400.000 dalam 6 bulan', trim($xpath->query('//*[@data-arus-chip]')->item(0)->textContent));
+        $this->assertStringContainsString('Setoran Rp 500.000', $teksKartu);
+        $this->assertStringContainsString('Penarikan Rp 100.000', $teksKartu);
+
+        // Baris kontrol: tab periode dan pemilih tampilan dalam satu baris.
+        $baris = $xpath->query('//*[@data-baris-kontrol]');
+        $this->assertSame(1, $baris->length);
+        $this->assertSame(1, $xpath->query('.//*[@role="group"][@aria-label="Periode"]', $baris->item(0))->length);
+        $this->assertSame(1, $xpath->query('.//*[@data-tampilan-label]', $baris->item(0))->length);
+        $this->assertSame('Garis', trim($xpath->query('//*[@data-tampilan-label]')->item(0)->textContent));
+        $this->assertStringNotContainsString('Tampilan:', $baris->item(0)->textContent);
+        $pilihan = [];
+        foreach ($xpath->query('//*[@data-tampilan]') as $node) {
+            $pilihan[$node->getAttribute('data-tampilan')] = trim($node->textContent);
+        }
+        $this->assertSame(['garis' => 'Garis', 'batang' => 'Batang', 'saldo' => 'Saldo', 'gabungan' => 'Gabungan'], $pilihan);
+        $response->assertDontSee('Kombinasi');
+
+        // Kaki: tombol tabel dan tautan laporan.
+        $kaki = $xpath->query('//*[@data-kaki-grafik]');
+        $this->assertSame(1, $kaki->length);
+        $tombol = $xpath->query('.//button[@data-tombol-tabel]', $kaki->item(0))->item(0);
+        $this->assertNotNull($tombol);
+        $this->assertSame('false', $tombol->getAttribute('aria-expanded'));
+        $this->assertStringContainsString('Tampilkan tabel', $tombol->textContent);
+        $tautan = $xpath->query('.//a[@data-tautan-rekap]', $kaki->item(0))->item(0);
+        $this->assertSame(route('laporan.keseluruhan'), $tautan->getAttribute('href'));
+        $this->assertSame('Laporan lengkap', trim($tautan->textContent));
+        $response->assertDontSee('Lihat rekap lengkap');
+
+        // Tabel: kolom pertama "Bulan" untuk enam_bulan, baris terbaru di atas.
+        $this->assertSame('Bulan', trim($xpath->query('//*[@data-arus-kolom-pertama]')->item(0)->textContent));
+        $kepala = [];
+        foreach ($xpath->query('//*[@id="tabel-arus"]//thead//th') as $th) {
+            $kepala[] = trim($th->textContent);
+        }
+        $this->assertSame(['Bulan', 'Setoran', 'Penarikan', 'Saldo akhir'], $kepala);
+        $baris = $xpath->query('//*[@data-arus-tabel]/tr');
+        $this->assertSame(6, $baris->length);
+        $this->assertStringContainsString('November 2026', $baris->item(0)->textContent);
+        $this->assertStringContainsString('Juni 2026', $baris->item(5)->textContent);
+    }
+
+    public function test_chip_grafik_tidak_berubah_saat_bersih_nol(): void
+    {
+        $anggota = Anggota::factory()->create(['tanggal_bergabung' => '2026-01-01']);
+        // Hanya transaksi di luar 6 bulan: bersih periode default = 0.
+        $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::SETOR, 500000, '2026-02-10');
+
+        $xpath = $this->xpath($this->actingAs($this->admin)->get(route('dashboard'))->getContent());
+
+        $this->assertSame('Tidak berubah', trim($xpath->query('//*[@data-arus-chip]')->item(0)->textContent));
     }
 
     public function test_kpi_anggota_baru_dan_bersih_bulan_ini_bertanda_sesuai_nilai(): void
@@ -293,24 +414,136 @@ class DashboardTest extends TestCase
         $bersih = fn () => trim($this->xpath($this->actingAs($this->admin)->get(route('dashboard'))->getContent())
             ->query('//*[@data-bersih-bulan-ini]')->item(0)->textContent);
 
-        // Nol: tanpa tanda.
-        $this->assertSame('Rp 0', $bersih());
+        // Nol: tanpa panah (F2c B.1).
+        $this->assertSame('Rp 0 bulan ini', $bersih());
 
         $anggota = Anggota::factory()->create(['tanggal_bergabung' => '2026-11-03']);
         $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::SETOR, 100000, '2026-11-05');
         $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::TARIK, 30000, '2026-11-06');
         $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::TARIK, 99000, '2026-10-30'); // bulan lalu
 
-        $this->assertSame('+Rp 70.000', $bersih());
+        $this->assertSame('▲ Rp 70.000 bulan ini', $bersih());
 
         $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::TARIK, 110000, '2026-11-07');
 
-        $this->assertSame('-Rp 40.000', $bersih());
+        $this->assertSame('▼ Rp 40.000 bulan ini', $bersih());
 
         $response = $this->actingAs($this->admin)->get(route('dashboard'));
-        $response->assertSee('1 anggota baru bulan ini');
-        $response->assertSee('Bersih bulan ini');
+        $response->assertSee('1 baru bulan ini');
+        $response->assertDontSee('Bersih bulan ini');
         $this->assertStringNotContainsString("\u{2212}", $response->getContent());
+    }
+
+    public function test_kartu_ringkasan_tanpa_ikon_dan_kartu_total_berlatar_arang(): void
+    {
+        $anggota = Anggota::factory()->create();
+        $this->buatTransaksi($anggota, JenisSimpanan::POKOK, TransaksiSimpanan::SETOR, 100000, '2026-11-01');
+        $this->buatTransaksi($anggota, JenisSimpanan::WAJIB, TransaksiSimpanan::SETOR, 50000, '2026-11-02');
+        $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::SETOR, 250000, '2026-11-03');
+
+        $response = $this->actingAs($this->admin)->get(route('dashboard'));
+        $xpath = $this->xpath($response->getContent());
+
+        $kartu = [
+            '//*[@data-kartu-total]',
+            '//*[@data-kartu-anggota]',
+            '//*[@data-kartu-arus-bulan="setor"]',
+            '//*[@data-kartu-arus-bulan="tarik"]',
+        ];
+        foreach ($kartu as $query) {
+            $node = $xpath->query($query);
+            $this->assertSame(1, $node->length, "Kartu {$query} harus ada tepat satu.");
+            // F2c B: ikon di semua kartu ringkasan dihapus (sparkline SVG bukan ikon).
+            $this->assertSame(0, $xpath->query('.//svg[not(@data-sparkline)]', $node->item(0))->length, "Kartu {$query} tidak boleh memuat ikon.");
+        }
+
+        $total = $xpath->query('//*[@data-kartu-total]')->item(0);
+        $this->assertMatchesRegularExpression('/\bbg-arang\b/', $total->getAttribute('class'));
+        $this->assertStringContainsString('Total simpanan', $total->textContent);
+        $this->assertStringContainsString('Rp 400.000', $total->textContent);
+        $this->assertSame(
+            'Pokok Rp 100.000 · Wajib Rp 50.000 · Sukarela Rp 250.000',
+            trim($xpath->query('//*[@data-rincian-total]')->item(0)->textContent)
+        );
+
+        // Garis aksen kiri: anggota arang, setoran setor, penarikan tarik (F2c H).
+        $this->assertSame('arang', $xpath->query('//*[@data-kartu-anggota]')->item(0)->getAttribute('data-aksen'));
+        $this->assertSame('setor', $xpath->query('//*[@data-kartu-arus-bulan="setor"]')->item(0)->getAttribute('data-aksen'));
+        $this->assertSame('tarik', $xpath->query('//*[@data-kartu-arus-bulan="tarik"]')->item(0)->getAttribute('data-aksen'));
+
+        foreach (['Setoran bulan ini', 'Penarikan bulan ini', 'Rp 0 hari ini'] as $teks) {
+            $response->assertSee($teks);
+        }
+        foreach (['Total saldo simpanan', 'Setor bulan ini', 'Tarik bulan ini'] as $teks) {
+            $response->assertDontSee($teks);
+        }
+    }
+
+    public function test_perbandingan_bulan_lalu_dan_badge_hari_ini(): void
+    {
+        $anggota = Anggota::factory()->create(['tanggal_bergabung' => '2026-01-01']);
+        // Setoran: Oktober 100.000, November 112.000 (hari ini 12.000) -> naik 12%.
+        $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::SETOR, 100000, '2026-10-05');
+        $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::SETOR, 100000, '2026-11-05');
+        $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::SETOR, 12000, '2026-11-12');
+        // Penarikan: Oktober 50.000, November 46.000 -> turun 8%.
+        $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::TARIK, 50000, '2026-10-20');
+        $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::TARIK, 46000, '2026-11-06');
+
+        $xpath = $this->xpath($this->actingAs($this->admin)->get(route('dashboard'))->getContent());
+        $elemen = fn (string $kartu, string $bagian) => $xpath->query("//*[@data-kartu-arus-bulan=\"{$kartu}\"]//*[@{$bagian}]")->item(0);
+
+        $this->assertSame('▲ 12% dari Oktober', trim($elemen('setor', 'data-banding')->textContent));
+        $this->assertSame('▼ 8% dari Oktober', trim($elemen('tarik', 'data-banding')->textContent));
+        $this->assertSame('Rp 12.000 hari ini', trim($elemen('setor', 'data-hari-ini')->textContent));
+        $this->assertSame('Rp 0 hari ini', trim($elemen('tarik', 'data-hari-ini')->textContent));
+
+        // Warna panah mengikuti token kartunya (F2c H): setoran selalu setor, penarikan selalu tarik.
+        $this->assertStringContainsString('text-setor', $elemen('setor', 'data-banding')->getAttribute('class'));
+        $this->assertStringContainsString('text-tarik', $elemen('tarik', 'data-banding')->getAttribute('class'));
+        // Badge hari ini: berwarna kalau > 0, abu kalau 0.
+        $this->assertStringContainsString('bg-setor-50', $elemen('setor', 'data-hari-ini')->getAttribute('class'));
+        $this->assertStringContainsString('bg-stone-100', $elemen('tarik', 'data-hari-ini')->getAttribute('class'));
+    }
+
+    public function test_perbandingan_tidak_tampil_jika_bulan_lalu_nol_dan_nol_persen_tanpa_panah(): void
+    {
+        $anggota = Anggota::factory()->create(['tanggal_bergabung' => '2026-01-01']);
+        // Setoran: Oktober 0 -> perbandingan tidak tampil.
+        $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::SETOR, 100000, '2026-09-01');
+        $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::SETOR, 200000, '2026-11-02');
+        // Penarikan: Oktober = November -> "0% dari Oktober" tanpa panah.
+        $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::TARIK, 30000, '2026-10-10');
+        $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::TARIK, 30000, '2026-11-03');
+
+        $xpath = $this->xpath($this->actingAs($this->admin)->get(route('dashboard'))->getContent());
+
+        $this->assertSame(0, $xpath->query('//*[@data-kartu-arus-bulan="setor"]//*[@data-banding]')->length);
+        $nol = $xpath->query('//*[@data-kartu-arus-bulan="tarik"]//*[@data-banding]')->item(0);
+        $this->assertSame('0% dari Oktober', trim($nol->textContent));
+        $this->assertStringContainsString('text-stone-500', $nol->getAttribute('class'));
+    }
+
+    public function test_sparkline_dirender_dengan_enam_titik(): void
+    {
+        $anggota = Anggota::factory()->create(['tanggal_bergabung' => '2026-01-01']);
+        $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::SETOR, 100000, '2026-07-05');
+        $this->buatTransaksi($anggota, JenisSimpanan::SUKARELA, TransaksiSimpanan::SETOR, 300000, '2026-09-05');
+
+        $xpath = $this->xpath($this->actingAs($this->admin)->get(route('dashboard'))->getContent());
+        $titik = fn (string $kunci) => preg_split('/\s+/', trim($xpath->query("//svg[@data-sparkline=\"{$kunci}\"]//polyline")->item(0)->getAttribute('points')));
+
+        foreach (['setor', 'tarik'] as $kunci) {
+            $svg = $xpath->query("//svg[@data-sparkline=\"{$kunci}\"]");
+            $this->assertSame(1, $svg->length);
+            $this->assertSame('80', $svg->item(0)->getAttribute('width'));
+            $this->assertSame('28', $svg->item(0)->getAttribute('height'));
+            $this->assertCount(6, $titik($kunci));
+        }
+
+        // Nilai tertinggi (September, indeks 3 dari Jun–Nov) berada paling atas (y terkecil).
+        $y = array_map(fn ($p) => (float) explode(',', $p)[1], $titik('setor'));
+        $this->assertSame(3, array_search(min($y), $y, true));
     }
 
     public function test_transaksi_terbaru_menampilkan_ikon_label_tanda_dan_nama_staff(): void

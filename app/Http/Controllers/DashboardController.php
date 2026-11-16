@@ -8,6 +8,7 @@ use App\Models\TransaksiSimpanan;
 use App\Services\GrafikService;
 use App\Services\SimpananService;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
@@ -15,10 +16,14 @@ class DashboardController extends Controller
 {
     /**
      * Dashboard ringkasan (FR-20, diperluas revisi R3). Semua angka dari query
-     * agregasi; tidak ada N+1. `grafikArus` ditambahkan di F2b (A.2).
+     * agregasi; tidak ada N+1. `grafikArus` ditambahkan di F2b (A.2). Filter
+     * transaksi terbaru (`filterTransaksi`, `jenisSimpanan`) ditambahkan di F2c (D.2).
      */
-    public function index(SimpananService $simpananService, GrafikService $grafikService): View
+    public function index(Request $request, SimpananService $simpananService, GrafikService $grafikService): View
     {
+        $jenisSimpanan = JenisSimpanan::query()->orderBy('id')->get();
+        $filterTransaksi = $this->filterTransaksi($request, $jenisSimpanan);
+
         $hariIni = now()->startOfDay();
         $awalBulan = now()->startOfMonth();
         $akhirBulan = now()->endOfMonth();
@@ -37,12 +42,43 @@ class DashboardController extends Controller
             'belumSetorWajib' => $belumSetorWajib,
             'jumlahBelumSetorWajib' => $jumlahBelumSetorWajib,
             'transaksiTerbaru' => TransaksiSimpanan::with(['anggota', 'jenisSimpanan', 'staff'])
+                ->filter($filterTransaksi)
                 ->orderByDesc('tanggal_transaksi')
                 ->orderByDesc('id')
                 ->limit(10)
                 ->get(),
             'grafikArus' => $grafikService->arusSimpanan(),
+            'filterTransaksi' => $filterTransaksi,
+            'jenisSimpanan' => $jenisSimpanan,
         ]);
+    }
+
+    /**
+     * Parameter filter transaksi terbaru (F2c D.2). Key = nama query parameter,
+     * nilai string|null; nilai tidak valid menjadi null (diabaikan diam-diam).
+     *
+     * @param  Collection<int, JenisSimpanan>  $jenisSimpanan
+     * @return array{cari: ?string, jenis_transaksi: ?string, jenis_simpanan_id: ?string, rentang: ?string}
+     */
+    private function filterTransaksi(Request $request, Collection $jenisSimpanan): array
+    {
+        $teks = function (string $kunci) use ($request): ?string {
+            $nilai = $request->query($kunci);
+            $nilai = is_scalar($nilai) ? trim((string) $nilai) : '';
+
+            return $nilai === '' ? null : $nilai;
+        };
+
+        $jenisTransaksi = $teks('jenis_transaksi');
+        $jenisSimpananId = $teks('jenis_simpanan_id');
+        $rentang = $teks('rentang');
+
+        return [
+            'cari' => $teks('cari'),
+            'jenis_transaksi' => in_array($jenisTransaksi, [TransaksiSimpanan::SETOR, TransaksiSimpanan::TARIK], true) ? $jenisTransaksi : null,
+            'jenis_simpanan_id' => $jenisSimpanan->contains(fn ($jenis) => (string) $jenis->id === $jenisSimpananId) ? $jenisSimpananId : null,
+            'rentang' => in_array($rentang, TransaksiSimpanan::RENTANG, true) ? $rentang : null,
+        ];
     }
 
     /**

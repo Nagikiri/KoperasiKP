@@ -17,7 +17,7 @@
                 </div>
             </div>
 
-            <dl class="mt-6 divide-y divide-stone-100 border-t border-stone-100 text-sm">
+            <dl class="mt-6 divide-y divide-stone-200 border-t border-stone-200 text-sm">
                 <div class="flex justify-between gap-4 py-3">
                     <dt class="text-stone-500">Nama</dt>
                     <dd class="text-right font-medium text-stone-900">{{ $user->nama }}</dd>

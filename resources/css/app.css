@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 @layer components {
-    /* Tabel seragam (F1 §3.7): pakai <table class="tabel">, sel angka diberi kelas .num. */
+    /* Tabel seragam (F1 §3.7): pakai <table class="tabel">, sel angka diberi kelas .num. Garis stone-200 (F2c A.2). */
     .tabel {
         @apply w-full text-left text-sm text-stone-700;
     }
@@ -13,7 +13,7 @@
     }
 
     .tabel tbody td {
-        @apply border-t border-stone-100 px-6 py-4;
+        @apply border-t border-stone-200 px-6 py-4;
     }
 
     .tabel tbody tr:hover {
