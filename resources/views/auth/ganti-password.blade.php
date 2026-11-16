@@ -1,10 +1,6 @@
 {{-- Pengaturan Akun (F1 §6): profil hanya-baca + form ganti password. Tidak ada edit profil (di luar scope). --}}
 @php($user = auth()->user())
 <x-app-layout>
-    <x-slot name="breadcrumb">
-        <span class="font-medium text-stone-900">Pengaturan Akun</span>
-    </x-slot>
-
     <x-ui.page-header title="Pengaturan Akun" subtitle="Profil dan keamanan akun staff." />
 
     <div class="grid items-start gap-6 lg:grid-cols-5">

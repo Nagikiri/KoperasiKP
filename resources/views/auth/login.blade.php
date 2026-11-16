@@ -57,7 +57,7 @@
                         <span class="text-sm text-stone-600">Ingat saya</span>
                     </label>
 
-                    <x-ui.button variant="primary" class="h-12 w-full">Masuk</x-ui.button>
+                    <x-ui.button variant="brand" class="h-12 w-full">Masuk</x-ui.button>
 
                     <p class="text-center text-xs text-stone-500">Lupa kata sandi? Hubungi pengurus koperasi.</p>
                 </form>

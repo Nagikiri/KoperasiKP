@@ -34,6 +34,24 @@ class Format
     }
 
     /**
+     * Sapaan dashboard sesuai jam WITA (F2b D.1): pagi 04.00–10.59, siang 11.00–14.59,
+     * sore 15.00–17.59, malam 18.00–03.59. Contoh: `Selamat pagi`.
+     */
+    public static function sapaan(Carbon $waktu): string
+    {
+        $jam = $waktu->copy()->setTimezone(config('app.timezone'))->hour;
+
+        $bagian = match (true) {
+            $jam >= 4 && $jam < 11 => 'pagi',
+            $jam >= 11 && $jam < 15 => 'siang',
+            $jam >= 15 && $jam < 18 => 'sore',
+            default => 'malam',
+        };
+
+        return 'Selamat '.$bagian;
+    }
+
+    /**
      * Contoh: `12 November 2026 14.30 WITA`.
      */
     public static function tanggalWaktu($waktu): string

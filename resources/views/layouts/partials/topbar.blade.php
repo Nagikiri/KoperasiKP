@@ -1,23 +1,26 @@
 {{--
-    Topbar (F1 §4.2): breadcrumb di kiri; tanggal hari ini dan menu akun di kanan. Tanpa pencarian dan notifikasi.
+    Topbar (F1 §4.2, F2b C.2): jejak di kiri hanya untuk halaman turunan (kosong untuk halaman setingkat menu);
+    tanggal hari ini dan menu akun di kanan. Tanpa pencarian dan notifikasi.
     Menu akun: dropdown Alpine (Enter/Space membuka lewat <button>, Esc dan klik di luar menutup).
-    Jangkar test: data-topbar, data-menu-akun.
+    Jangkar test: data-topbar, data-jejak, data-menu-akun.
 --}}
 @php
     $user = Auth::user();
     $aktifAkun = request()->routeIs('password.edit');
 @endphp
 <header data-topbar class="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 border-b border-stone-200 bg-white px-8">
-    <div class="min-w-0 truncate text-sm text-stone-500">
+    <div data-jejak class="min-w-0 truncate text-sm text-stone-500">
         @if ($breadcrumb)
             {{ $breadcrumb }}
         @elseif ($jejak)
             @foreach ($jejak as $bagian)
                 @if (! $loop->first)<span class="mx-1.5 text-stone-300">/</span>@endif
-                <span class="{{ $loop->last ? 'font-medium text-stone-900' : '' }}">{{ $bagian }}</span>
+                @if (isset($bagian['url']))
+                    <a href="{{ $bagian['url'] }}" class="hover:text-stone-900 hover:underline">{{ $bagian['label'] }}</a>
+                @else
+                    <span class="{{ $loop->last ? 'font-medium text-stone-900' : '' }}">{{ $bagian['label'] }}</span>
+                @endif
             @endforeach
-        @else
-            <span class="font-medium text-stone-900">{{ config('app.name') }}</span>
         @endif
     </div>
 

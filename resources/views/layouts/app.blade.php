@@ -18,14 +18,20 @@
         ]],
     ];
 
-    // Breadcrumb bawaan dari item menu yang aktif; halaman boleh menimpanya lewat slot "breadcrumb".
+    // Jejak topbar (F2b C.2): hanya untuk halaman turunan Data Anggota. Halaman setingkat menu
+    // tidak punya jejak karena judulnya sudah ada di konten. Halaman boleh menimpanya lewat slot "breadcrumb".
+    // Nama anggota diambil dari model hasil route model binding (tanpa query tambahan).
     $jejak = null;
-    foreach ($menu as $grup) {
-        foreach ($grup['item'] as $item) {
-            if (request()->routeIs($item['aktif'])) {
-                $jejak = array_filter([$grup['grup'], $item['label']]);
-            }
-        }
+    $anggotaRute = request()->route('anggota');
+    $namaAnggota = $anggotaRute instanceof \App\Models\Anggota ? $anggotaRute->nama : null;
+    $induk = ['label' => 'Data Anggota', 'url' => route('anggota.index')];
+
+    if (request()->routeIs('anggota.create')) {
+        $jejak = [$induk, ['label' => 'Tambah']];
+    } elseif ($namaAnggota !== null && request()->routeIs('anggota.show')) {
+        $jejak = [$induk, ['label' => $namaAnggota]];
+    } elseif ($namaAnggota !== null && request()->routeIs('anggota.edit')) {
+        $jejak = [$induk, ['label' => $namaAnggota], ['label' => 'Ubah']];
     }
 @endphp
 <!DOCTYPE html>

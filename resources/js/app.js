@@ -6,8 +6,7 @@ window.Alpine = Alpine;
 
 Alpine.start();
 
-// Grafik tren dashboard (F2): Chart.js hanya dimuat jika elemennya ada.
-const grafikTren = document.getElementById('grafik-tren');
-if (grafikTren) {
-    import('./grafik/tren-bulanan').then(({ default: pasangGrafikTren }) => pasangGrafikTren(grafikTren));
+// Grafik dashboard (F2b D.3, D.4): Chart.js hanya dimuat jika salah satu kanvasnya ada.
+if (document.getElementById('grafik-arus') || document.getElementById('grafik-komposisi')) {
+    import('./grafik/arus-simpanan').then(({ default: pasangGrafikDashboard }) => pasangGrafikDashboard());
 }

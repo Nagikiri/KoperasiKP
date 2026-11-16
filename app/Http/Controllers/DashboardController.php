@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Anggota;
 use App\Models\JenisSimpanan;
 use App\Models\TransaksiSimpanan;
+use App\Services\GrafikService;
 use App\Services\SimpananService;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -14,9 +15,9 @@ class DashboardController extends Controller
 {
     /**
      * Dashboard ringkasan (FR-20, diperluas revisi R3). Semua angka dari query
-     * agregasi; tidak ada N+1.
+     * agregasi; tidak ada N+1. `grafikArus` ditambahkan di F2b (A.2).
      */
-    public function index(SimpananService $simpananService): View
+    public function index(SimpananService $simpananService, GrafikService $grafikService): View
     {
         $hariIni = now()->startOfDay();
         $awalBulan = now()->startOfMonth();
@@ -40,6 +41,7 @@ class DashboardController extends Controller
                 ->orderByDesc('id')
                 ->limit(10)
                 ->get(),
+            'grafikArus' => $grafikService->arusSimpanan(),
         ]);
     }
 

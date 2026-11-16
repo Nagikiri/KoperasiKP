@@ -178,6 +178,57 @@ class TampilanDasarTest extends TestCase
     }
 
     // ---------------------------------------------------------------
+    // Jejak topbar dan varian tombol (F2b C.1, C.2)
+    // ---------------------------------------------------------------
+
+    public function test_jejak_topbar_kosong_untuk_halaman_setingkat_menu(): void
+    {
+        $halaman = ['dashboard', 'anggota.index', 'transaksi.setor.create', 'transaksi.tarik.create', 'transaksi.riwayat', 'laporan.keseluruhan', 'laporan.anggota', 'password.edit'];
+
+        foreach ($halaman as $nama) {
+            $html = $this->actingAs($this->admin)->get(route($nama))->assertOk()->getContent();
+            $jejak = $this->bagian($html, 'div', 'data-jejak');
+
+            $this->assertSame('', trim(strip_tags($jejak)), "Jejak topbar {$nama} harus kosong.");
+        }
+
+        $jejakDashboard = $this->bagian($this->actingAs($this->admin)->get(route('dashboard'))->getContent(), 'div', 'data-jejak');
+        $this->assertStringNotContainsString('Dashboard', $jejakDashboard);
+        $this->assertStringNotContainsString(config('app.name'), $jejakDashboard);
+    }
+
+    public function test_jejak_topbar_halaman_turunan_data_anggota(): void
+    {
+        $anggota = Anggota::factory()->create(['nama' => 'Budi Santoso']);
+        $tautanInduk = '/<a href="'.preg_quote(route('anggota.index'), '/').'"[^>]*>Data Anggota<\/a>/';
+
+        $kasus = [
+            [route('anggota.create'), ['Tambah']],
+            [route('anggota.show', $anggota), ['Budi Santoso']],
+            [route('anggota.edit', $anggota), ['Budi Santoso', 'Ubah']],
+        ];
+
+        foreach ($kasus as [$url, $bagianLain]) {
+            $jejak = $this->bagian($this->actingAs($this->admin)->get($url)->assertOk()->getContent(), 'div', 'data-jejak');
+
+            $this->assertMatchesRegularExpression($tautanInduk, $jejak, "Jejak di {$url} harus diawali tautan Data Anggota.");
+            foreach ($bagianLain as $teks) {
+                $this->assertStringContainsString($teks, $jejak);
+            }
+        }
+    }
+
+    public function test_tombol_masuk_memakai_varian_brand_dan_tombol_utama_lain_arang(): void
+    {
+        $login = $this->get(route('login'))->getContent();
+        $this->assertMatchesRegularExpression('/<button[^>]*class="[^"]*\bbg-merah\b[^"]*"[^>]*>\s*Masuk\s*<\/button>/', $login);
+
+        $akun = $this->actingAs($this->admin)->get(route('password.edit'))->getContent();
+        $this->assertMatchesRegularExpression('/<button[^>]*class="[^"]*\bbg-arang\b[^"]*"[^>]*>\s*Simpan kata sandi\s*<\/button>/', $akun);
+        $this->assertDoesNotMatchRegularExpression('/<(a|button)\b[^>]*class="[^"]*\bbg-merah\b/', $akun, 'Tombol merah hanya di halaman login.');
+    }
+
+    // ---------------------------------------------------------------
     // Halaman Pengaturan Akun
     // ---------------------------------------------------------------
 
@@ -187,7 +238,9 @@ class TampilanDasarTest extends TestCase
 
         $html = $this->actingAs($this->admin)->get(route('password.edit'))->assertOk()->getContent();
 
-        $this->assertStringContainsString('Pengaturan Akun', $this->bagian($html, 'header', 'data-topbar'));
+        // F2b C.2: judul hanya di page header; jejak topbar kosong untuk halaman setingkat menu.
+        $this->assertMatchesRegularExpression('/<h1[^>]*>Pengaturan Akun<\/h1>/', $html);
+        $this->assertStringNotContainsString('Pengaturan Akun', $this->bagian($html, 'div', 'data-jejak'));
         $this->assertStringContainsString('Profil dan keamanan akun staff.', $html);
 
         $this->assertSame(1, preg_match('/data-kartu-profil(.*?)data-kartu-ganti-password/s', $html, $cocok));
