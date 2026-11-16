@@ -10,7 +10,6 @@
     $rupiahMinus = fn ($nilai) => (float) $nilai < 0 ? '-'.Format::rupiah(abs((float) $nilai)) : Format::rupiah($nilai);
     $nadaTanda = fn ($nilai) => (float) $nilai > 0 ? 'setor' : ((float) $nilai < 0 ? 'tarik' : 'nol');
 
-    $teksNada = ['setor' => 'text-setor', 'tarik' => 'text-tarik', 'nol' => 'text-stone-500'];
     $chipNada = ['setor' => 'bg-setor-50 text-setor', 'tarik' => 'bg-tarik-50 text-tarik', 'nol' => 'bg-stone-100 text-stone-500'];
 
     // Warna jenis simpanan untuk sebaran simpanan (sama dengan objek WARNA di arus-simpanan.js, F2c H).
@@ -31,53 +30,48 @@
 
     $bersihBulanIni = round($aktivitasBulanIni['total_setor'] - $aktivitasBulanIni['total_tarik'], 2);
 
-    // F2c B.1: badge perubahan bulan ini di kartu Total (latar arang). ▲/▼ hanya untuk badge perubahan dan perbandingan (F2c I.1).
-    $teksPerubahan = fn ($nilai) => (float) $nilai > 0 ? '▲ '.Format::rupiah($nilai) : ((float) $nilai < 0 ? '▼ '.Format::rupiah(abs((float) $nilai)) : Format::rupiah(0));
-    $badgeTotal = [
-        'setor' => 'bg-[rgba(79,107,237,0.18)] text-[#A9B8FF]',
-        'tarik' => 'bg-[rgba(240,112,90,0.18)] text-[#FFB4A6]',
-        'nol' => 'bg-white/10 text-stone-300',
-    ];
-    $rincianTotal = $rekapSaldo
-        ->map(fn ($rekap) => str_replace('Simpanan ', '', $rekap['nama_jenis']).' '.Format::rupiah($rekap['saldo']))
-        ->implode(' · ');
-
-    // F2c B.3/B.4: perbandingan dengan bulan lalu dan sparkline dari 6 bulan terakhir (tanpa query baru).
+    // F2c B (revisi K3): rincian kartu ringkasan. Tanda ASCII; positif setor, negatif tarik, nol stone-900.
+    $warnaBersih = ['setor' => 'text-setor', 'tarik' => 'text-tarik', 'nol' => 'text-stone-900'];
+    $bersihHariIni = round($aktivitasHariIni['total_setor'] - $aktivitasHariIni['total_tarik'], 2);
     $enamBulan = $grafikArus['periode']['enam_bulan'];
-    $namaBulanLalu = now()->startOfMonth()->subMonth()->translatedFormat('F');
-    $banding = function (array $nilai) use ($namaBulanLalu): ?array {
-        $lalu = (float) $nilai[count($nilai) - 2];
-        $ini = (float) $nilai[count($nilai) - 1];
-        if ($lalu <= 0) {
-            return null;
-        }
-        $persen = (int) round(abs($ini - $lalu) / $lalu * 100);
-        $arah = $persen === 0 ? null : ($ini > $lalu ? '▲' : '▼');
+    $bulanLalu = fn (array $nilai) => (float) ($nilai[count($nilai) - 2] ?? 0);
 
-        return ['arah' => $arah, 'teks' => ($arah ? $arah.' ' : '').$persen.'% dari '.$namaBulanLalu];
-    };
-    $sparkline = function (array $nilai): string {
-        $nilai = array_map('floatval', $nilai);
-        $min = min($nilai);
-        $rentang = max($nilai) - $min;
-        $langkah = 78 / (count($nilai) - 1);
-
-        return collect($nilai)->map(fn ($v, $i) => round(1 + $i * $langkah, 1).','.round($rentang > 0 ? 27 - ($v - $min) / $rentang * 26 : 14, 1))->implode(' ');
-    };
-    $kartuArus = [
-        'setor' => [
-            'label' => 'Setoran bulan ini',
-            'bulan_ini' => $aktivitasBulanIni['total_setor'],
-            'hari_ini' => $aktivitasHariIni['total_setor'],
-            'banding' => $banding($enamBulan['setor']),
-            'sparkline' => $sparkline($enamBulan['setor']),
+    $kartuRingkasan = [
+        [
+            'jangkar' => 'total',
+            'label' => 'Total simpanan',
+            'nilai' => Format::rupiah($totalSaldo),
+            'rincian' => [
+                ['label' => 'Bersih bulan ini', 'nilai' => $bertanda($bersihBulanIni), 'warna' => $warnaBersih[$nadaTanda($bersihBulanIni)]],
+                ['label' => 'Bersih hari ini', 'nilai' => $bertanda($bersihHariIni), 'warna' => $warnaBersih[$nadaTanda($bersihHariIni)]],
+            ],
         ],
-        'tarik' => [
+        [
+            'jangkar' => 'anggota',
+            'label' => 'Anggota aktif',
+            'nilai' => $ringkasanAnggota['aktif'],
+            'rincian' => [
+                ['label' => 'Baru bulan ini', 'nilai' => $ringkasanAnggota['baru_bulan_ini']],
+                ['label' => 'Nonaktif', 'nilai' => $ringkasanAnggota['nonaktif']],
+            ],
+        ],
+        [
+            'jangkar' => 'setor',
+            'label' => 'Setoran bulan ini',
+            'nilai' => Format::rupiah($aktivitasBulanIni['total_setor']),
+            'rincian' => [
+                ['label' => 'Hari ini', 'nilai' => Format::rupiah($aktivitasHariIni['total_setor'])],
+                ['label' => 'Bulan lalu', 'nilai' => Format::rupiah($bulanLalu($enamBulan['setor']))],
+            ],
+        ],
+        [
+            'jangkar' => 'tarik',
             'label' => 'Penarikan bulan ini',
-            'bulan_ini' => $aktivitasBulanIni['total_tarik'],
-            'hari_ini' => $aktivitasHariIni['total_tarik'],
-            'banding' => $banding($enamBulan['tarik']),
-            'sparkline' => $sparkline($enamBulan['tarik']),
+            'nilai' => Format::rupiah($aktivitasBulanIni['total_tarik']),
+            'rincian' => [
+                ['label' => 'Hari ini', 'nilai' => Format::rupiah($aktivitasHariIni['total_tarik'])],
+                ['label' => 'Bulan lalu', 'nilai' => Format::rupiah($bulanLalu($enamBulan['tarik']))],
+            ],
         ],
     ];
 
@@ -111,32 +105,10 @@
     </x-ui.page-header>
 
     <div class="grid grid-cols-12 items-stretch gap-6">
-        {{-- F2c B: kartu ringkasan tanpa ikon. Total di kiri (latar arang), tiga kartu lain di kanan. --}}
-        <x-ui.stat class="col-span-12 h-full 2xl:col-span-4" tone="gelap" label="Total simpanan" :value="Format::rupiah($totalSaldo)" data-kartu-total>
-            <span data-bersih-bulan-ini class="inline-flex rounded-full px-2 py-0.5 font-medium tabular-nums {{ $badgeTotal[$nadaTanda($bersihBulanIni)] }}">{{ $teksPerubahan($bersihBulanIni) }} bulan ini</span>
-            <p class="mt-3 tabular-nums" data-rincian-total>{{ $rincianTotal }}</p>
-        </x-ui.stat>
-
-        <div class="col-span-12 grid grid-cols-1 items-stretch gap-6 sm:grid-cols-2 xl:grid-cols-3 2xl:col-span-8">
-            <x-ui.stat class="h-full" aksen="arang" label="Anggota aktif" :value="$ringkasanAnggota['aktif']" data-kartu-anggota>
-                <span class="inline-flex rounded-full bg-stone-100 px-2 py-0.5 font-medium text-stone-600">{{ $ringkasanAnggota['baru_bulan_ini'] }} baru bulan ini</span>
-                <span class="ml-1.5">{{ $ringkasanAnggota['nonaktif'] }} nonaktif</span>
-            </x-ui.stat>
-
-            @foreach ($kartuArus as $kunci => $kartu)
-                <x-ui.stat class="h-full" :aksen="$kunci" :label="$kartu['label']" :value="Format::rupiah($kartu['bulan_ini'])" :data-kartu-arus-bulan="$kunci">
-                    <div class="flex items-end justify-between gap-3">
-                        <div class="min-w-0 space-y-1.5">
-                            <span data-hari-ini class="inline-flex rounded-full px-2 py-0.5 font-medium tabular-nums {{ $kartu['hari_ini'] > 0 ? ($kunci === 'setor' ? 'bg-setor-50 text-setor' : 'bg-tarik-50 text-tarik') : 'bg-stone-100 text-stone-600' }}">{{ Format::rupiah($kartu['hari_ini']) }} hari ini</span>
-                            @if ($kartu['banding'])
-                                <p data-banding class="whitespace-nowrap font-medium {{ $kartu['banding']['arah'] ? $teksNada[$kunci] : 'text-stone-500' }}">{{ $kartu['banding']['teks'] }}</p>
-                            @endif
-                        </div>
-                        <svg data-sparkline="{{ $kunci }}" class="shrink-0 {{ $teksNada[$kunci] }}" width="80" height="28" viewBox="0 0 80 28" fill="none" aria-hidden="true">
-                            <polyline points="{{ $kartu['sparkline'] }}" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-                        </svg>
-                    </div>
-                </x-ui.stat>
+        {{-- F2c B (revisi K): empat kartu ringkasan putih sama lebar, rincian dua baris. --}}
+        <div class="col-span-12 grid grid-cols-1 items-stretch gap-6 sm:grid-cols-2 xl:grid-cols-4">
+            @foreach ($kartuRingkasan as $kartu)
+                <x-ui.stat class="h-full" :label="$kartu['label']" :value="$kartu['nilai']" :rincian="$kartu['rincian']" :data-kartu-ringkasan="$kartu['jangkar']" />
             @endforeach
         </div>
 
