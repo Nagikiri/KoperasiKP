@@ -1,7 +1,11 @@
+{{--
+    Modal Breeze (Alpine), dirapikan di F3 H.3.1: elemen terluar menggabungkan $attributes
+    (jangkar test seperti data-modal-nonaktifkan), latar arang/40, panel rounded-2xl berbayangan tipis, lebar default md.
+--}}
 @props([
     'name',
     'show' => false,
-    'maxWidth' => '2xl'
+    'maxWidth' => 'md'
 ])
 
 @php
@@ -46,7 +50,7 @@ $maxWidth = [
     x-on:keydown.tab.prevent="$event.shiftKey || nextFocusable().focus()"
     x-on:keydown.shift.tab.prevent="prevFocusable().focus()"
     x-show="show"
-    class="fixed inset-0 overflow-y-auto px-4 py-6 sm:px-0 z-50"
+    {{ $attributes->except('focusable')->merge(['class' => 'fixed inset-0 overflow-y-auto px-4 py-6 sm:px-0 z-50']) }}
     style="display: {{ $show ? 'block' : 'none' }};"
 >
     <div
@@ -60,12 +64,12 @@ $maxWidth = [
         x-transition:leave-start="opacity-100"
         x-transition:leave-end="opacity-0"
     >
-        <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+        <div class="absolute inset-0 bg-arang/40"></div>
     </div>
 
     <div
         x-show="show"
-        class="mb-6 bg-white rounded-lg overflow-hidden shadow-xl transform transition-all sm:w-full {{ $maxWidth }} sm:mx-auto"
+        class="mb-6 mt-24 bg-white border border-stone-200 rounded-2xl overflow-hidden shadow-[0_1px_2px_rgba(28,25,23,0.04),0_2px_6px_rgba(28,25,23,0.04)] transform transition-all sm:w-full {{ $maxWidth }} sm:mx-auto"
         x-transition:enter="ease-out duration-300"
         x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
         x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"

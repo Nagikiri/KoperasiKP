@@ -1,4 +1,4 @@
-{{-- Judul halaman (F1 §3.6). back: URL opsional untuk tautan kembali; slot actions di kanan. --}}
+{{-- Judul halaman (F1 §3.6). back: URL opsional untuk tautan kembali; slot actions di kanan; slot badge opsional di samping judul (F3 H.2.5). --}}
 @props(['title', 'subtitle' => null, 'back' => null])
 <div {{ $attributes->merge(['class' => 'mb-6']) }}>
     @if ($back)
@@ -9,7 +9,14 @@
     @endif
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
-            <h1 class="text-[26px] font-semibold tracking-tight text-stone-900">{{ $title }}</h1>
+            @isset($badge)
+                <div class="flex flex-wrap items-center gap-3">
+                    <h1 class="text-[26px] font-semibold tracking-tight text-stone-900">{{ $title }}</h1>
+                    {{ $badge }}
+                </div>
+            @else
+                <h1 class="text-[26px] font-semibold tracking-tight text-stone-900">{{ $title }}</h1>
+            @endisset
             @if ($subtitle)
                 <p class="mt-1 text-sm text-stone-600">{{ $subtitle }}</p>
             @endif

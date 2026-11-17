@@ -236,8 +236,12 @@ class TampilanAnggotaNonaktifTest extends TestCase
         );
 
         $detail = $this->html(route('anggota.show', $this->andi));
-        $this->assertStringContainsString('<td colspan="2" data-keterangan-saldo-nonaktif style="font-style: italic;', $detail);
-        $this->assertStringContainsString(Anggota::KETERANGAN_SALDO_NONAKTIF, $detail);
+        // F3 H.1.2: di detail anggota keterangan menjadi banner [data-keterangan-saldo-nonaktif], teks tepat satu kali.
+        $this->assertMatchesRegularExpression(
+            '/<div data-keterangan-saldo-nonaktif\b[^>]*>.*?'.preg_quote(Anggota::KETERANGAN_SALDO_NONAKTIF, '/').'.*?<\/div>/s',
+            $detail,
+        );
+        $this->assertSame(1, substr_count($detail, Anggota::KETERANGAN_SALDO_NONAKTIF));
 
         $this->assertStringNotContainsString(Anggota::KETERANGAN_SALDO_NONAKTIF, $this->html(route('anggota.show', $budi)));
     }

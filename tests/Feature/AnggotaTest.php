@@ -123,10 +123,28 @@ class AnggotaTest extends TestCase
             $this->assertSame(1, substr_count($html, 'data-cegah-kirim-ganda'), "Skrip harus tepat satu kali di {$url}.");
         }
 
-        // Konfirmasi nonaktifkan tetap ada; skrip global mengabaikan submit yang dibatalkan.
-        $this->actingAs($this->admin)->get(route('anggota.index'))
-            ->assertSee("return confirm('Nonaktifkan anggota ini?", false)
-            ->assertSee('event.defaultPrevented', false);
+        // F3: konfirmasi nonaktifkan memakai modal (bukan confirm()); skrip global tetap memeriksa defaultPrevented.
+        $index = $this->actingAs($this->admin)->get(route('anggota.index'))
+            ->assertSee('data-modal-nonaktifkan', false)
+            ->assertDontSee('confirm(', false)
+            ->assertSee('event.defaultPrevented', false)
+            ->getContent();
+
+        $xpath = $this->xpath($index);
+        $form = $xpath->query('//*[@data-modal-nonaktifkan]//form[@action="'.route('anggota.nonaktifkan', $anggota).'"]');
+        $this->assertSame(1, $form->length, 'Form nonaktifkan harus berada di dalam pembungkus data-modal-nonaktifkan.');
+        $this->assertSame('POST', strtoupper($form->item(0)->getAttribute('method')));
+        $this->assertSame(1, $xpath->query('.//input[@type="hidden"][@name="_method"][@value="PATCH"]', $form->item(0))->length);
+    }
+
+    private function xpath(string $html): \DOMXPath
+    {
+        $dom = new \DOMDocument;
+        libxml_use_internal_errors(true);
+        $dom->loadHTML($html);
+        libxml_clear_errors();
+
+        return new \DOMXPath($dom);
     }
 
     public function test_halaman_daftar_tambah_dan_ubah_tampil(): void
@@ -477,6 +495,208 @@ class AnggotaTest extends TestCase
     public function test_anggota_yang_tidak_ada_menghasilkan_404(): void
     {
         $this->actingAs($this->admin)->get('/anggota/9999')->assertNotFound();
+    }
+
+    // ---------------------------------------------------------------
+    // F3 §1–§2 — daftar anggota dan pagination
+    // ---------------------------------------------------------------
+
+    public function test_daftar_memuat_form_pencarian_dan_tombol_tambah_anggota(): void
+    {
+        Anggota::factory()->create(['nama' => 'Budi Santoso']);
+
+        $html = $this->actingAs($this->admin)->get(route('anggota.index'))
+            ->assertOk()
+            ->assertSee('1 anggota terdaftar')
+            ->getContent();
+
+        $xpath = $this->xpath($html);
+        $this->assertSame(1, $xpath->query('//form[@method="GET"][@action="'.route('anggota.index').'"]//input[@name="search"]')->length);
+        $this->assertSame(1, $xpath->query('//a[@href="'.route('anggota.create').'"][contains(normalize-space(.), "Tambah anggota")]')->length);
+        $this->assertStringContainsString('Cari', $xpath->query('//form[@method="GET"]//button[@type="submit"]')->item(0)->textContent);
+    }
+
+    public function test_tautan_reset_pencarian_hanya_tampil_saat_search_terisi(): void
+    {
+        Anggota::factory()->create(['nama' => 'Budi Santoso']);
+        Anggota::factory()->create(['nama' => 'Siti Aminah']);
+
+        $this->actingAs($this->admin)->get(route('anggota.index'))
+            ->assertDontSee('data-reset-pencarian', false);
+
+        $this->actingAs($this->admin)->get(route('anggota.index', ['search' => 'budi']))
+            ->assertSee('data-reset-pencarian', false)
+            ->assertSee('1 anggota ditemukan');
+    }
+
+    public function test_keadaan_kosong_tanpa_dan_dengan_pencarian(): void
+    {
+        $kosong = $this->actingAs($this->admin)->get(route('anggota.index'))->getContent();
+        $this->assertStringContainsString('Belum ada anggota', $kosong);
+        // Tombol utama hanya satu (di kepala halaman); tombol di keadaan kosong bergaya secondary.
+        $this->assertSame(1, preg_match_all('/<a href="'.preg_quote(route('anggota.create'), '/').'"[^>]*\bbg-arang\b/', $kosong));
+        $this->assertSame(2, substr_count($kosong, 'href="'.route('anggota.create').'"'));
+
+        Anggota::factory()->create(['nama' => 'Budi Santoso']);
+        $this->actingAs($this->admin)->get(route('anggota.index', ['search' => 'zzz']))
+            ->assertSee("Tidak ada anggota yang cocok dengan 'zzz'.")
+            ->assertSee('Reset pencarian')
+            ->assertSee('0 anggota ditemukan');
+    }
+
+    public function test_pagination_berbahasa_indonesia(): void
+    {
+        Anggota::factory()->count(16)->sequence(fn ($s) => ['nama' => sprintf('Anggota %02d', $s->index + 1)])->create();
+
+        $html = $this->actingAs($this->admin)->get(route('anggota.index'))->assertOk()->getContent();
+
+        $this->assertSame(1, preg_match('/<nav[^>]*data-pagination[^>]*>.*?<\/nav>/s', $html, $nav));
+        $this->assertStringContainsString('Menampilkan 1–15 dari 16', $nav[0]);
+        $this->assertStringContainsString('Sebelumnya', $nav[0]);
+        $this->assertStringContainsString('Berikutnya', $nav[0]);
+        $this->assertMatchesRegularExpression('/<span aria-current="page"[^>]*>1<\/span>/', $nav[0]);
+        $this->assertStringNotContainsString('Showing', $nav[0]);
+
+        // Satu halaman saja: pagination tidak dirender.
+        $this->actingAs($this->admin)->get(route('anggota.index', ['search' => 'Anggota 01']))
+            ->assertDontSee('data-pagination', false);
+    }
+
+    public function test_modal_nonaktifkan_satu_per_anggota_aktif(): void
+    {
+        $aktif = Anggota::factory()->create(['nama' => 'Budi Santoso']);
+        $nonaktif = Anggota::factory()->nonaktif()->create(['nama' => 'Andi Wijaya']);
+
+        $html = $this->actingAs($this->admin)->get(route('anggota.index'))->getContent();
+        $xpath = $this->xpath($html);
+
+        $this->assertSame(1, $xpath->query('//*[@data-modal-nonaktifkan]')->length);
+        $this->assertSame(1, $xpath->query('//*[@data-modal-nonaktifkan]//form[@action="'.route('anggota.nonaktifkan', $aktif).'"]')->length);
+        $this->assertSame(0, $xpath->query('//form[@action="'.route('anggota.nonaktifkan', $nonaktif).'"]')->length);
+        $this->assertStringContainsString("open-modal', 'nonaktifkan-{$aktif->id}'", $html);
+        // Modal dirender di luar tabel.
+        $this->assertSame(0, $xpath->query('//table//*[@data-modal-nonaktifkan]')->length);
+        // Tombol Batal dan pemicu tidak mengirim form.
+        $this->assertSame(1, $xpath->query('//*[@data-modal-nonaktifkan]//button[@type="button"][normalize-space(.)="Batal"]')->length);
+        $this->assertSame(1, $xpath->query('//button[@type="button"][@aria-label="Nonaktifkan Budi Santoso"]')->length);
+    }
+
+    // ---------------------------------------------------------------
+    // F3 §3 — form tambah dan ubah
+    // ---------------------------------------------------------------
+
+    public function test_form_tambah_dan_ubah_memuat_semua_field_dan_tiga_kartu(): void
+    {
+        $anggota = Anggota::factory()->create(['nama' => 'Budi Santoso', 'no_anggota' => 'KSP-2026-0007']);
+
+        $tambah = $this->actingAs($this->admin)->get(route('anggota.create'))->getContent();
+        $ubah = $this->actingAs($this->admin)->get(route('anggota.edit', $anggota))->getContent();
+
+        foreach (['tambah' => $tambah, 'ubah' => $ubah] as $halaman => $html) {
+            $xpath = $this->xpath($html);
+            foreach (['nama', 'nik', 'no_telepon', 'tanggal_bergabung'] as $field) {
+                $this->assertSame(1, $xpath->query('//form[@method="POST"]//input[@name="'.$field.'"]')->length, "Field {$field} di form {$halaman}.");
+            }
+            $this->assertSame(1, $xpath->query('//form[@method="POST"]//textarea[@name="alamat"]')->length);
+            foreach (['pribadi', 'kontak', 'keanggotaan'] as $kartu) {
+                $this->assertSame(1, $xpath->query('//*[@data-kartu-form="'.$kartu.'"]')->length, "Kartu {$kartu} di form {$halaman}.");
+            }
+            $this->assertSame(1, $xpath->query('//input[@name="nik"][@inputmode="numeric"][@maxlength="16"]')->length);
+        }
+
+        $this->assertMatchesRegularExpression('/<input type="hidden" name="kode_referensi" value="[0-9a-f-]{36}">/', $tambah);
+        $this->assertStringContainsString('Simpan anggota', $tambah);
+
+        $this->assertStringNotContainsString('kode_referensi', $ubah);
+        $this->assertStringContainsString('<input type="hidden" name="_method" value="PUT">', $ubah);
+        $this->assertStringContainsString('Simpan perubahan', $ubah);
+        // Nomor anggota tampil sebagai teks, bukan input.
+        $this->assertMatchesRegularExpression('/data-nomor-anggota>KSP-2026-0007</', $ubah);
+        $this->assertStringNotContainsString('name="no_anggota"', $ubah);
+    }
+
+    public function test_error_validasi_tampil_di_bawah_field_dan_input_lama_kembali(): void
+    {
+        $this->actingAs($this->admin)
+            ->from(route('anggota.create'))
+            ->followingRedirects()
+            ->post(route('anggota.store'), $this->dataValid(['nik' => '320123456789000', 'nama' => 'Budi Santoso']))
+            ->assertSee('NIK harus terdiri dari tepat 16 digit angka.')
+            ->assertSee('value="320123456789000"', false)
+            ->assertSee('value="Budi Santoso"', false)
+            ->assertDontSee('data-flash', false);
+    }
+
+    // ---------------------------------------------------------------
+    // F3 §4 — detail anggota
+    // ---------------------------------------------------------------
+
+    public function test_detail_anggota_aktif_memuat_aksi_modal_dan_kartu(): void
+    {
+        $anggota = Anggota::factory()->create(['nama' => 'Budi Santoso', 'no_telepon' => null, 'alamat' => null]);
+
+        $html = $this->actingAs($this->admin)->get(route('anggota.show', $anggota))->assertOk()->getContent();
+        $xpath = $this->xpath($html);
+
+        $this->assertSame(1, $xpath->query('//h1[normalize-space(.)="Budi Santoso"]/following-sibling::*[@data-status-anggota="aktif"]')->length);
+        $this->assertSame(1, $xpath->query('//*[@data-modal-nonaktifkan]//form[@action="'.route('anggota.nonaktifkan', $anggota).'"]')->length);
+        $this->assertSame(1, $xpath->query('//a[@href="'.route('transaksi.setor.create', ['anggota_id' => $anggota->id]).'"][contains(., "Catat setoran")]')->length);
+        $this->assertSame(1, $xpath->query('//a[@href="'.route('anggota.edit', $anggota).'"][contains(., "Ubah")]')->length);
+        $this->assertSame(3, $xpath->query('//*[@data-saldo-jenis]')->length);
+        // Identitas: nilai kosong ditulis "–".
+        $this->assertSame(2, $xpath->query('//*[@data-kartu-identitas]//dd[normalize-space(.)="–"]')->length);
+        $this->assertStringContainsString('Belum ada transaksi untuk anggota ini.', $html);
+        $this->assertStringNotContainsString('data-keterangan-saldo-nonaktif', $html);
+    }
+
+    public function test_detail_anggota_nonaktif_tanpa_modal_dan_catat_setoran_dengan_banner_bila_saldo(): void
+    {
+        $anggota = Anggota::factory()->create(['nama' => 'Andi Wijaya']);
+        $this->buatTransaksi($anggota, '2026-03-01', JenisSimpanan::POKOK, TransaksiSimpanan::SETOR, 100000);
+        $anggota->update(['status' => Anggota::STATUS_NONAKTIF]);
+
+        $html = $this->actingAs($this->admin)->get(route('anggota.show', $anggota))->assertOk()->getContent();
+
+        $this->assertStringNotContainsString('data-modal-nonaktifkan', $html);
+        $this->assertStringNotContainsString('Catat setoran', $html);
+        $this->assertStringNotContainsString(route('anggota.nonaktifkan', $anggota), $html);
+        $this->assertStringContainsString('data-keterangan-saldo-nonaktif', $html);
+        $this->assertSame(1, substr_count($html, Anggota::KETERANGAN_SALDO_NONAKTIF));
+    }
+
+    public function test_detail_riwayat_bertanda_ascii_catatan_dipotong_dan_tanpa_kolom_jenis_simpanan(): void
+    {
+        $anggota = Anggota::factory()->create();
+        $catatan = 'Setoran untuk biaya pendidikan anak pertama semester ganjil';
+        $setor = $this->buatTransaksi($anggota, '2026-03-01', JenisSimpanan::SUKARELA, TransaksiSimpanan::SETOR, 150000);
+        $setor->update(['keterangan' => $catatan]);
+        $this->buatTransaksi($anggota, '2026-03-02', JenisSimpanan::SUKARELA, TransaksiSimpanan::TARIK, 50000);
+
+        $html = $this->actingAs($this->admin)->get(route('anggota.show', $anggota))->getContent();
+        $xpath = $this->xpath($html);
+
+        $this->assertSame('+Rp 150.000', trim($xpath->query('//tr[@data-transaksi="setor"]//*[@data-nominal]')->item(0)->textContent));
+        $this->assertSame('-Rp 50.000', trim($xpath->query('//tr[@data-transaksi="tarik"]//*[@data-nominal]')->item(0)->textContent));
+        $this->assertStringNotContainsString('−', $html);
+
+        $sel = $xpath->query('//*[@data-catatan]')->item(0);
+        $this->assertSame($catatan, $sel->getAttribute('title'));
+        $this->assertSame(\Illuminate\Support\Str::limit($catatan, 40), trim($sel->textContent));
+
+        $kepala = array_map(fn ($th) => trim($th->textContent), iterator_to_array($xpath->query('//*[@data-kartu-riwayat]//thead//th')));
+        $this->assertSame(['Tanggal', 'Transaksi', 'Jumlah', 'Saldo akhir', 'Dicatat oleh', 'Catatan'], $kepala);
+    }
+
+    public function test_detail_riwayat_memakai_pagination_indonesia(): void
+    {
+        $anggota = Anggota::factory()->create();
+        for ($hari = 1; $hari <= 11; $hari++) {
+            $this->buatTransaksi($anggota, sprintf('2026-03-%02d', $hari));
+        }
+
+        $this->actingAs($this->admin)->get(route('anggota.show', $anggota))
+            ->assertSee('data-pagination', false)
+            ->assertSee('Menampilkan 1–10 dari 11');
     }
 
     /**

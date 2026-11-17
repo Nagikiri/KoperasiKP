@@ -467,15 +467,7 @@
                                 @php $setor = $transaksi->jenis_transaksi === TransaksiSimpanan::SETOR; @endphp
                                 <tr data-transaksi="{{ $setor ? 'setor' : 'tarik' }}">
                                     <td>
-                                        <div class="flex items-center gap-3">
-                                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg {{ $setor ? 'bg-setor-50 text-setor' : 'bg-tarik-50 text-tarik' }}">
-                                                <x-ui.icon :name="$setor ? 'arrow-down-tray' : 'arrow-up-tray'" class="w-5 h-5" />
-                                            </span>
-                                            <div class="min-w-0">
-                                                <div class="font-medium text-stone-900">{{ $setor ? 'Setor' : 'Tarik' }}</div>
-                                                <div class="text-xs text-stone-500">{{ $transaksi->jenisSimpanan->nama_jenis }}</div>
-                                            </div>
-                                        </div>
+                                        <x-ui.jenis-transaksi :jenis="$transaksi->jenis_transaksi" :nama-jenis="$transaksi->jenisSimpanan->nama_jenis" />
                                     </td>
                                     <td>
                                         <div class="text-stone-900"><x-nama-anggota :nama="$transaksi->anggota->nama" :status="$transaksi->anggota->status" /></div>
