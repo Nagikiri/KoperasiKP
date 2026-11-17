@@ -30,7 +30,16 @@ class DashboardController extends Controller
 
         $rekapSaldo = $simpananService->rekapPerJenis();
 
-        [$belumSetorWajib, $jumlahBelumSetorWajib] = $this->belumSetorWajib($awalBulan, $akhirBulan);
+        // F2d F.2: dua daftar sekaligus (bulan ini dan bulan lalu), dipilih di browser tanpa muat ulang.
+        $wajibId = JenisSimpanan::where('nama_jenis', JenisSimpanan::WAJIB)->value('id');
+        [$belumSetorWajib, $jumlahBelumSetorWajib] = $this->belumSetorWajib($wajibId, $awalBulan, $akhirBulan);
+        $awalBulanLalu = now()->startOfMonth()->subMonthNoOverflow();
+        [$belumSetorWajibBulanLalu, $jumlahBelumSetorWajibBulanLalu] = $this->belumSetorWajib(
+            $wajibId,
+            $awalBulanLalu,
+            $awalBulanLalu->copy()->endOfMonth(),
+            bergabungPalingLambat: $awalBulanLalu->copy()->endOfMonth(),
+        );
 
         return view('dashboard', [
             'ringkasanAnggota' => $this->ringkasanAnggota($awalBulan, $akhirBulan),
@@ -41,12 +50,16 @@ class DashboardController extends Controller
             'trenBulanan' => $this->trenBulanan(),
             'belumSetorWajib' => $belumSetorWajib,
             'jumlahBelumSetorWajib' => $jumlahBelumSetorWajib,
+            'belumSetorWajibBulanLalu' => $belumSetorWajibBulanLalu,
+            'jumlahBelumSetorWajibBulanLalu' => $jumlahBelumSetorWajibBulanLalu,
             'transaksiTerbaru' => TransaksiSimpanan::with(['anggota', 'jenisSimpanan', 'staff'])
                 ->filter($filterTransaksi)
                 ->orderByDesc('tanggal_transaksi')
                 ->orderByDesc('id')
                 ->limit(10)
                 ->get(),
+            // F2d E.6: jumlah transaksi yang cocok dengan filter (untuk kaki "Lihat semua {n} transaksi").
+            'jumlahTransaksiCocok' => TransaksiSimpanan::query()->filter($filterTransaksi)->count(),
             'grafikArus' => $grafikService->arusSimpanan(),
             'filterTransaksi' => $filterTransaksi,
             'jenisSimpanan' => $jenisSimpanan,
@@ -171,17 +184,17 @@ class DashboardController extends Controller
     }
 
     /**
-     * Anggota aktif yang belum setor Simpanan Wajib di bulan berjalan. Informasi
-     * saja, bukan aturan bisnis.
+     * Anggota aktif yang belum setor Simpanan Wajib di bulan tertentu. Informasi
+     * saja, bukan aturan bisnis. Daftar maksimal 50 (F2d F.4, H.2.3); jumlah tetap penuh.
+     * Bulan lalu (F2d F.2): hanya anggota yang sudah bergabung paling lambat akhir bulan itu.
      *
      * @return array{0: Collection<int, Anggota>, 1: int}
      */
-    private function belumSetorWajib(Carbon $awalBulan, Carbon $akhirBulan): array
+    private function belumSetorWajib(?int $wajibId, Carbon $awalBulan, Carbon $akhirBulan, ?Carbon $bergabungPalingLambat = null): array
     {
-        $wajibId = JenisSimpanan::where('nama_jenis', JenisSimpanan::WAJIB)->value('id');
-
         $query = Anggota::query()
             ->aktif()
+            ->when($bergabungPalingLambat, fn ($q, Carbon $batas) => $q->whereDate('tanggal_bergabung', '<=', $batas->toDateString()))
             ->whereDoesntHave('transaksiSimpanan', fn ($q) => $q
                 ->where('jenis_simpanan_id', $wajibId)
                 ->where('jenis_transaksi', TransaksiSimpanan::SETOR)
@@ -189,7 +202,7 @@ class DashboardController extends Controller
                 ->whereDate('tanggal_transaksi', '<=', $akhirBulan->toDateString()));
 
         return [
-            (clone $query)->orderBy('nama')->limit(10)->get(['id', 'no_anggota', 'nama']),
+            (clone $query)->orderBy('nama')->limit(50)->get(['id', 'no_anggota', 'nama']),
             $query->count(),
         ];
     }

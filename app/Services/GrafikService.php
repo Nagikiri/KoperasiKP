@@ -11,8 +11,10 @@ class GrafikService
      * Data grafik "Arus simpanan" di dashboard (F2b A.1) untuk enam periode
      * sekaligus, supaya pilihan periode di browser tidak butuh request baru.
      *
-     * Dua query saja: (1) saldo sebelum awal rentang terpanjang (lima_tahun),
-     * (2) agregasi setor/tarik per tanggal dalam rentang lima_tahun.
+     * Dua query saja: (1) saldo sebelum awal rentang query, (2) agregasi setor/tarik
+     * (nominal dan jumlah baris) per tanggal. Rentang query = lima_tahun ditambah jendela
+     * "sebelumnya" miliknya (F2d C.4, H.6.2), supaya perbandingan dengan periode
+     * sebelumnya tidak butuh query baru.
      * Pengelompokan ke ember dilakukan di PHP, tanpa fungsi tanggal khusus database.
      *
      * Asumsi: tidak ada transaksi bertanggal masa depan (BR-10), jadi saldo ember
@@ -33,45 +35,77 @@ class GrafikService
             'lima_tahun' => ['nama' => '5 tahun terakhir', 'ember' => $this->emberKuartalan($hariIni, 20)],
         ];
 
-        $mulaiTerpanjang = $definisi['lima_tahun']['ember'][0]['mulai'];
+        $mulaiLimaTahun = $definisi['lima_tahun']['ember'][0]['mulai'];
+
+        // F2d C.4, H.6.2: rentang query diperluas ke awal jendela "sebelumnya" milik lima_tahun.
+        $mulaiQuery = $mulaiLimaTahun->copy()->subDays($this->panjangHari($mulaiLimaTahun, $hariIni));
 
         $saldoSebelumRentang = round((float) TransaksiSimpanan::query()
-            ->whereDate('tanggal_transaksi', '<', $mulaiTerpanjang->toDateString())
+            ->whereDate('tanggal_transaksi', '<', $mulaiQuery->toDateString())
             ->selectRaw(
                 "COALESCE(SUM(CASE WHEN jenis_transaksi = 'setor' THEN jumlah ELSE 0 END), 0)
                - COALESCE(SUM(CASE WHEN jenis_transaksi = 'tarik' THEN jumlah ELSE 0 END), 0) AS saldo"
             )
             ->value('saldo'), 2);
 
-        /** @var array<string, array{setor: float, tarik: float}> $perTanggal kunci Y-m-d, urut lama -> baru */
+        /** @var array<string, array{setor: float, tarik: float, jumlah_setor: int, jumlah_tarik: int}> $perTanggal kunci Y-m-d, urut lama -> baru */
         $perTanggal = [];
         TransaksiSimpanan::query()
-            ->whereDate('tanggal_transaksi', '>=', $mulaiTerpanjang->toDateString())
+            ->whereDate('tanggal_transaksi', '>=', $mulaiQuery->toDateString())
             ->whereDate('tanggal_transaksi', '<=', $hariIni->toDateString())
             ->selectRaw("tanggal_transaksi,
                 COALESCE(SUM(CASE WHEN jenis_transaksi = 'setor' THEN jumlah ELSE 0 END), 0) AS total_setor,
-                COALESCE(SUM(CASE WHEN jenis_transaksi = 'tarik' THEN jumlah ELSE 0 END), 0) AS total_tarik")
+                COALESCE(SUM(CASE WHEN jenis_transaksi = 'tarik' THEN jumlah ELSE 0 END), 0) AS total_tarik,
+                COUNT(CASE WHEN jenis_transaksi = 'setor' THEN 1 END) AS jumlah_setor,
+                COUNT(CASE WHEN jenis_transaksi = 'tarik' THEN 1 END) AS jumlah_tarik")
             ->groupBy('tanggal_transaksi')
             ->orderBy('tanggal_transaksi')
             ->toBase()
             ->get()
             ->each(function ($baris) use (&$perTanggal) {
                 $kunci = Carbon::parse($baris->tanggal_transaksi)->toDateString();
-                $perTanggal[$kunci] ??= ['setor' => 0.0, 'tarik' => 0.0];
+                $perTanggal[$kunci] ??= ['setor' => 0.0, 'tarik' => 0.0, 'jumlah_setor' => 0, 'jumlah_tarik' => 0];
                 $perTanggal[$kunci]['setor'] += (float) $baris->total_setor;
                 $perTanggal[$kunci]['tarik'] += (float) $baris->total_tarik;
+                $perTanggal[$kunci]['jumlah_setor'] += (int) $baris->jumlah_setor;
+                $perTanggal[$kunci]['jumlah_tarik'] += (int) $baris->jumlah_tarik;
             });
+
+        // F2d H.2.2: ada_data hanya dari transaksi di rentang lima_tahun, bukan rentang query yang diperluas.
+        $adaData = false;
+        foreach (array_keys($perTanggal) as $tanggal) {
+            if ($tanggal >= $mulaiLimaTahun->toDateString()) {
+                $adaData = true;
+                break;
+            }
+        }
 
         $periode = [];
         foreach ($definisi as $kunci => $item) {
             $periode[$kunci] = $this->hitungPeriode($item['nama'], $item['ember'], $perTanggal, $saldoSebelumRentang, $hariIni);
+
+            // F2d B.1: ember khusus tampilan Batang untuk periode yang embernya > 13.
+            if (count($item['ember']) > 13) {
+                $mulai = $item['ember'][0]['mulai'];
+                $emberBatang = $kunci === 'lima_tahun'
+                    ? $this->emberBatangTahunan($mulai, $hariIni)
+                    : $this->emberBatangMingguan($mulai, $hariIni);
+                $batang = $this->hitungPeriode('', $emberBatang, $perTanggal, $saldoSebelumRentang, $hariIni);
+                $periode[$kunci]['batang'] = array_intersect_key($batang, array_flip(['label', 'label_lengkap', 'setor', 'tarik', 'saldo']));
+            }
         }
 
         return [
             'default' => 'enam_bulan',
             'periode' => $periode,
-            'ada_data' => $perTanggal !== [],
+            'ada_data' => $adaData,
         ];
+    }
+
+    /** Jumlah hari dari $mulai sampai $hariIni, inklusif. */
+    private function panjangHari(Carbon $mulai, Carbon $hariIni): int
+    {
+        return (int) round(abs($mulai->copy()->startOfDay()->diffInDays($hariIni->copy()->startOfDay()))) + 1;
     }
 
     /**
@@ -88,14 +122,29 @@ class GrafikService
         $setor = array_fill(0, $jumlahEmber, 0.0);
         $tarik = array_fill(0, $jumlahEmber, 0.0);
         $saldoAwal = $saldoSebelumRentang;
+        $jumlahSetor = 0;
+        $jumlahTarik = 0;
+
+        // F2d H.3.1: jendela "sebelumnya" = jumlah hari yang sama persis, tepat sebelum `mulai`.
+        $mulaiSebelumnya = $ember[0]['mulai']->copy()->subDays($this->panjangHari($ember[0]['mulai'], $hariIni))->toDateString();
+        $sebelumnyaSetor = 0.0;
+        $sebelumnyaTarik = 0.0;
 
         foreach ($perTanggal as $tanggal => $nilai) {
             if ($tanggal < $mulai) {
                 // Transaksi sebelum rentang periode ini ikut ke saldo awal.
                 $saldoAwal += $nilai['setor'] - $nilai['tarik'];
 
+                if ($tanggal >= $mulaiSebelumnya) {
+                    $sebelumnyaSetor += $nilai['setor'];
+                    $sebelumnyaTarik += $nilai['tarik'];
+                }
+
                 continue;
             }
+
+            $jumlahSetor += $nilai['jumlah_setor'];
+            $jumlahTarik += $nilai['jumlah_tarik'];
 
             // Ember = batas awal terbesar yang <= tanggal (string Y-m-d bisa dibandingkan langsung).
             $indeks = $jumlahEmber - 1;
@@ -134,6 +183,13 @@ class GrafikService
                 'bersih' => round($totalSetor - $totalTarik, 2),
                 'saldo_awal' => round($saldoAwal, 2),
                 'saldo_akhir' => $saldo[$jumlahEmber - 1],
+                // F2d C.4
+                'jumlah_setor' => $jumlahSetor,
+                'jumlah_tarik' => $jumlahTarik,
+                'sebelumnya' => [
+                    'total_setor' => round($sebelumnyaSetor, 2),
+                    'total_tarik' => round($sebelumnyaTarik, 2),
+                ],
             ],
         ];
     }
@@ -182,10 +238,15 @@ class GrafikService
     /**
      * Contoh: `4–10 November 2026`, `28 Oktober–3 November 2026`,
      * `29 Desember 2025–4 Januari 2026`. Pemisah en dash (U+2013) tanpa spasi.
+     * Tanggal awal = akhir ditulis satu tanggal saja (`12 November 2026`).
      */
     private function rentangMinggu(Carbon $senin, Carbon $minggu): string
     {
         $akhir = $minggu->translatedFormat('j F Y');
+
+        if ($senin->isSameDay($minggu)) {
+            return $akhir;
+        }
 
         if ($senin->year !== $minggu->year) {
             return $senin->translatedFormat('j F Y')."\u{2013}".$akhir;
@@ -196,6 +257,62 @@ class GrafikService
         }
 
         return $senin->day."\u{2013}".$akhir;
+    }
+
+    /**
+     * Ember batang periode `bulan` (F2d B.1, H.3.2): per minggu kalender (Senin), ember pertama
+     * mulai dari `mulai` periode dan ember terakhir berhenti di hari ini (dipotong di kedua ujung).
+     *
+     * @return list<array{mulai: Carbon, label: string, label_lengkap: string}>
+     */
+    private function emberBatangMingguan(Carbon $mulai, Carbon $hariIni): array
+    {
+        $ember = [];
+        $awal = $mulai->copy();
+        while ($awal->lte($hariIni)) {
+            $akhir = $awal->copy()->endOfWeek(Carbon::SUNDAY)->startOfDay()->min($hariIni);
+            $ember[] = [
+                'mulai' => $awal,
+                'label' => $awal->translatedFormat('j M'),
+                'label_lengkap' => $this->rentangMinggu($awal, $akhir),
+            ];
+            $awal = $akhir->copy()->addDay();
+        }
+
+        return $ember;
+    }
+
+    /**
+     * Ember batang periode `lima_tahun` (F2d B.1, H.3.2): per tahun kalender, dipotong di kedua
+     * ujung. Tahun penuh ditulis `2023`; tahun terpotong `April–Desember 2022`.
+     *
+     * @return list<array{mulai: Carbon, label: string, label_lengkap: string}>
+     */
+    private function emberBatangTahunan(Carbon $mulai, Carbon $hariIni): array
+    {
+        $ember = [];
+        $awal = $mulai->copy();
+        while ($awal->lte($hariIni)) {
+            $akhir = $awal->copy()->endOfYear()->startOfDay()->min($hariIni);
+            $penuh = $awal->isSameDay($awal->copy()->startOfYear()) && $akhir->isSameDay($awal->copy()->endOfYear()->startOfDay());
+
+            if ($penuh) {
+                $lengkap = (string) $awal->year;
+            } elseif ($awal->month === $akhir->month) {
+                $lengkap = $awal->translatedFormat('F Y');
+            } else {
+                $lengkap = $awal->translatedFormat('F')."\u{2013}".$akhir->translatedFormat('F Y');
+            }
+
+            $ember[] = [
+                'mulai' => $awal,
+                'label' => (string) $awal->year,
+                'label_lengkap' => $lengkap,
+            ];
+            $awal = $akhir->copy()->addDay();
+        }
+
+        return $ember;
     }
 
     /**

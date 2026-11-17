@@ -18,17 +18,17 @@ import {
 
 Chart.register(ArcElement, BarController, BarElement, CategoryScale, DoughnutController, Filler, LinearScale, LineController, LineElement, PointElement, Tooltip);
 
-// Satu sumber warna (F2c H). Token Tailwind setor/tarik memakai nilai yang sama.
+// Satu sumber warna (F2c H, F2d A). Token Tailwind setor/tarik memakai nilai yang sama.
 const WARNA = {
-    setor: '#4F6BED',
-    tarik: '#F0705A',
+    setor: '#3F63A8',
+    tarik: '#B85A41',
     saldo: '#C8930E',
     // Gradasi isi area: warna seri -> transparan (F2c §0.2, H).
-    isiSetor: [79, 107, 237, 0.22],
-    isiTarik: [240, 112, 90, 0.18],
+    isiSetor: [63, 99, 168, 0.22],
+    isiTarik: [184, 90, 65, 0.18],
     isiSaldo: [212, 160, 23, 0.22],
-    setorGabungan: 'rgba(79,107,237,0.9)',
-    tarikGabungan: 'rgba(240,112,90,0.9)',
+    setorGabungan: 'rgba(63,99,168,0.9)',
+    tarikGabungan: 'rgba(184,90,65,0.9)',
     pokok: '#1F2328',
     wajib: '#D4A017',
     sukarela: '#94A3B8',
@@ -50,17 +50,24 @@ const TAMPILAN = { garis: 'Garis', batang: 'Batang', saldo: 'Saldo', gabungan: '
 const TAMPILAN_DEFAULT = 'garis';
 const KUNCI_SIMPAN = { periode: 'dashboard.arus.periode', tampilan: 'dashboard.arus.tampilan' };
 
-// Teks yang sama dengan dashboard.blade.php (F2c C.1, C.3).
-const DALAM_PERIODE = {
-    minggu: 'dalam 7 hari',
-    bulan: 'dalam 30 hari',
-    tiga_bulan: 'dalam 3 bulan',
-    enam_bulan: 'dalam 6 bulan',
-    tahun: 'dalam setahun',
-    lima_tahun: 'dalam 5 tahun',
+// Teks yang sama dengan dashboard.blade.php (F2d C.3, F2c C.3).
+const TEKS_PERIODE = {
+    minggu: '7 hari',
+    bulan: '30 hari',
+    tiga_bulan: '3 bulan',
+    enam_bulan: '6 bulan',
+    tahun: '1 tahun',
+    lima_tahun: '5 tahun',
 };
+const KELAS_SELISIH = ['text-naik', 'text-turun', 'text-stone-900'];
 const KOLOM_PERTAMA = { minggu: 'Tanggal', bulan: 'Tanggal', tiga_bulan: 'Minggu', enam_bulan: 'Bulan', tahun: 'Bulan', lima_tahun: 'Kuartal' };
-const BATAS_LABEL_BATANG = 12;
+// F2d H.3.3: nama kolom pertama saat tabel mengikuti ember batang.
+const KOLOM_PERTAMA_BATANG = { bulan: 'Minggu', lima_tahun: 'Tahun' };
+const BATAS_LABEL_BATANG = 13;
+// F2d H.4.1/H.6.1: ruang atas khusus tampilan Batang (2 baris label) dan faktor skala.
+const RUANG_ATAS_BATANG = 28;
+const FAKTOR_ATAS_BATANG = 1.18;
+const FAKTOR_ATAS = 1.08;
 
 Chart.defaults.font.family = "Inter, ui-sans-serif, system-ui, sans-serif";
 
@@ -96,6 +103,63 @@ function rupiahRingkas(nilai) {
     return nilai < 0 ? `-Rp ${ringkas(-nilai)}` : `Rp ${ringkas(nilai)}`;
 }
 
+// Persen 1 desimal bertanda ASCII, sama dengan $persen di dashboard.blade.php.
+const angkaPersen = new Intl.NumberFormat('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+function persen(nilai) {
+    const bulat = Math.round(nilai * 10) / 10;
+    return `${bulat > 0 ? '+' : bulat < 0 ? '-' : ''}${angkaPersen.format(Math.abs(bulat))}%`;
+}
+
+function teksBanding(sekarang, sebelum) {
+    return sebelum === 0 ? '— vs sebelumnya' : `${persen(((sekarang - sebelum) / sebelum) * 100)} vs sebelumnya`;
+}
+
+// ---------------------------------------------------------------
+// Sparkline kotak arus (F2d C.3): SVG kecil, bukan instans Chart.js.
+// ---------------------------------------------------------------
+const SVG = 'http://www.w3.org/2000/svg';
+
+function gambarSparkline(wadah, nilai, warna) {
+    if (!wadah) return;
+
+    const lebar = 72;
+    const tinggi = 28;
+    const tepi = 2;
+    const angka = nilai.map(Number);
+    const min = Math.min(...angka);
+    const max = Math.max(...angka);
+    const rentang = max - min || 1;
+    const titik = angka.map((n, i) => {
+        const x = angka.length > 1 ? (i / (angka.length - 1)) * lebar : lebar / 2;
+        const y = max === min ? tinggi / 2 : tepi + (1 - (n - min) / rentang) * (tinggi - 2 * tepi);
+        return [x.toFixed(1), y.toFixed(1)];
+    });
+    const jalur = titik.map(([x, y], i) => `${i ? 'L' : 'M'}${x} ${y}`).join(' ');
+
+    const svg = document.createElementNS(SVG, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${lebar} ${tinggi}`);
+    svg.setAttribute('width', lebar);
+    svg.setAttribute('height', tinggi);
+    svg.setAttribute('fill', 'none');
+
+    const isi = document.createElementNS(SVG, 'path');
+    isi.setAttribute('d', `${jalur} L${lebar} ${tinggi} L0 ${tinggi} Z`);
+    isi.setAttribute('fill', warna);
+    isi.setAttribute('fill-opacity', '0.08');
+
+    const garis = document.createElementNS(SVG, 'path');
+    garis.setAttribute('d', jalur);
+    garis.setAttribute('stroke', warna);
+    garis.setAttribute('stroke-width', '1.5');
+    garis.setAttribute('stroke-linejoin', 'round');
+    garis.setAttribute('stroke-linecap', 'round');
+    garis.setAttribute('vector-effect', 'non-scaling-stroke');
+
+    svg.append(isi, garis);
+    wadah.replaceChildren(svg);
+}
+
 // ---------------------------------------------------------------
 // Penyimpanan pilihan (localStorage dibungkus try/catch).
 // ---------------------------------------------------------------
@@ -126,13 +190,13 @@ function langkahRapi(kasar) {
     return rapi * pangkat;
 }
 
-function skalaRapi(nilai, { mulaiNol }) {
+function skalaRapi(nilai, { mulaiNol, faktorAtas = FAKTOR_ATAS }) {
     const angka = nilai.filter((n) => Number.isFinite(n));
     const tertinggi = angka.length ? Math.max(...angka) : 0;
     const terendah = angka.length ? Math.min(...angka) : 0;
 
     let bawah = mulaiNol ? Math.min(0, terendah) : terendah * 0.97;
-    let atas = tertinggi * 1.08;
+    let atas = tertinggi * faktorAtas;
     if (atas <= bawah) atas = bawah + (Math.abs(bawah) || 100000);
 
     let langkah = langkahRapi((atas - bawah) / 4);
@@ -242,9 +306,10 @@ function datasetBatang(kunci, label, warna) {
         hoverBackgroundColor: warna,
         borderRadius: { topLeft: 6, topRight: 6 },
         borderSkipped: false,
-        maxBarThickness: 14,
-        categoryPercentage: 0.62,
-        barPercentage: 0.78,
+        // F2d B.4: batang lebih tebal.
+        maxBarThickness: 24,
+        categoryPercentage: 0.72,
+        barPercentage: 0.86,
     };
 }
 
@@ -316,12 +381,12 @@ function pasangGrafikArus(kanvas) {
 
     const data = JSON.parse(sumber.textContent);
     const kartu = kanvas.closest('[data-kartu-arus]') ?? document;
+    const kotak = (kunci) => kartu.querySelector(`[data-arus-kotak="${kunci}"]`);
     const elemen = {
         saldo: kartu.querySelector('[data-arus-saldo]'),
-        chip: kartu.querySelector('[data-arus-chip]'),
-        setor: kartu.querySelector('[data-arus-setor]'),
-        tarik: kartu.querySelector('[data-arus-tarik]'),
-        legendaSaldo: kartu.querySelector('[data-arus-legenda-saldo]'),
+        kotak: { setor: kotak('setor'), tarik: kotak('tarik'), selisih: kotak('selisih') },
+        periodeTeks: [...kartu.querySelectorAll('[data-arus-periode-teks]')],
+        persamaan: kartu.querySelector('[data-arus-persamaan]'),
         tabel: kartu.querySelector('[data-arus-tabel]'),
         kolomPertama: kartu.querySelector('[data-arus-kolom-pertama]'),
         labelTampilan: kartu.querySelector('[data-tampilan-label]'),
@@ -335,10 +400,56 @@ function pasangGrafikArus(kanvas) {
     };
 
     const periodeAktif = () => data.periode[keadaan.periode];
-    const deret = (kunci) => periodeAktif()[kunci].map(Number);
+    const pakaiBatang = () => keadaan.tampilan === 'batang' || keadaan.tampilan === 'gabungan';
+    // F2d B.2: Batang dan Gabungan memakai ember `batang` jika ada; Garis dan Saldo memakai ember biasa.
+    const emberAktif = () => (pakaiBatang() && periodeAktif().batang) || periodeAktif();
+    const deret = (kunci) => emberAktif()[kunci].map(Number);
     let grafik = null;
 
-    // Label nilai ringkas di atas batang (hanya tampilan Batang dengan ember ≤ 12).
+    // Label nilai ringkas di atas batang (tampilan Batang, ember ≤ 13). F2d H.4.1: label tidak boleh saling
+    // timpa. (a) label yang lebih tinggi dinaikkan satu baris; (b) jika masih bertabrakan, font 10 px;
+    // (c) jika masih, SEMUA label disembunyikan pada render itu (tooltip tetap ada).
+    function susunLabel(chart, ukuran) {
+        const { ctx } = chart;
+        ctx.font = `500 ${ukuran}px ${Chart.defaults.font.family}`;
+        const tinggi = ukuran;
+        const baris = ukuran + 2;
+        const perKelompok = new Map();
+
+        chart.data.datasets.forEach((dataset, i) => {
+            chart.getDatasetMeta(i).data.forEach((batang, j) => {
+                const nilai = Number(dataset.data[j]);
+                if (!(nilai > 0)) return;
+                const teks = ringkas(nilai);
+                const label = { teks, x: batang.x, y: batang.y - 4, lebar: ctx.measureText(teks).width };
+                if (!perKelompok.has(j)) perKelompok.set(j, []);
+                perKelompok.get(j).push(label);
+            });
+        });
+
+        const bertabrakan = (a, b) =>
+            Math.abs(a.x - b.x) < (a.lebar + b.lebar) / 2 + 2 && Math.abs(a.y - b.y) < tinggi;
+
+        // (a) Dalam satu kelompok: naikkan label yang posisinya lebih tinggi satu baris.
+        perKelompok.forEach((kelompok) => {
+            if (kelompok.length === 2 && bertabrakan(kelompok[0], kelompok[1])) {
+                const atas = kelompok[0].y <= kelompok[1].y ? kelompok[0] : kelompok[1];
+                const bawah = atas === kelompok[0] ? kelompok[1] : kelompok[0];
+                atas.y = Math.min(atas.y, bawah.y) - baris;
+            }
+        });
+
+        // Cek ulang semua pasangan (termasuk kelompok tetangga).
+        const semua = [...perKelompok.values()].flat();
+        for (let i = 0; i < semua.length; i++) {
+            for (let k = i + 1; k < semua.length; k++) {
+                if (bertabrakan(semua[i], semua[k])) return null;
+            }
+        }
+
+        return semua;
+    }
+
     const pluginLabelBatang = {
         id: 'labelBatang',
         afterDatasetsDraw(chart) {
@@ -346,16 +457,14 @@ function pasangGrafikArus(kanvas) {
 
             const { ctx } = chart;
             ctx.save();
-            ctx.font = `500 11px ${Chart.defaults.font.family}`;
-            ctx.fillStyle = WARNA.sumbu;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'bottom';
-            chart.data.datasets.forEach((dataset, i) => {
-                chart.getDatasetMeta(i).data.forEach((batang, j) => {
-                    const nilai = Number(dataset.data[j]);
-                    if (nilai > 0) ctx.fillText(ringkas(nilai), batang.x, batang.y - 4);
-                });
-            });
+            const ukuran = [11, 10].find((n) => susunLabel(chart, n) !== null);
+            if (ukuran !== undefined) {
+                const label = susunLabel(chart, ukuran);
+                ctx.fillStyle = WARNA.sumbu;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+                label.forEach(({ teks, x, y }) => ctx.fillText(teks, x, y));
+            }
             ctx.restore();
         },
     };
@@ -367,7 +476,8 @@ function pasangGrafikArus(kanvas) {
 
         if (keadaan.tampilan === 'saldo') return { y: skalaRapi(saldo, { mulaiNol: false }) };
 
-        const skala = { y: skalaRapi([...setor, ...tarik], { mulaiNol: true }) };
+        const faktorAtas = keadaan.tampilan === 'batang' ? FAKTOR_ATAS_BATANG : FAKTOR_ATAS;
+        const skala = { y: skalaRapi([...setor, ...tarik], { mulaiNol: true, faktorAtas }) };
         if (keadaan.tampilan === 'gabungan') skala.y1 = skalaRapi(saldo, { mulaiNol: false });
         return skala;
     }
@@ -381,9 +491,9 @@ function pasangGrafikArus(kanvas) {
     }
 
     function buatGrafik() {
-        const periode = periodeAktif();
+        const ember = emberAktif();
         const datasets = susunDataset(keadaan.tampilan).map((dataset) => ({ ...dataset, data: deret(dataset.kunci) }));
-        const adaBatang = keadaan.tampilan === 'batang' || keadaan.tampilan === 'gabungan';
+        const adaBatang = pakaiBatang();
 
         const scales = {
             x: {
@@ -412,12 +522,12 @@ function pasangGrafikArus(kanvas) {
 
         grafik = new Chart(kanvas, {
             type: adaBatang ? 'bar' : 'line',
-            data: { labels: periode.label, datasets },
+            data: { labels: ember.label, datasets },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 devicePixelRatio: Math.max(window.devicePixelRatio || 1, 2),
-                layout: { padding: { top: 8, right: 4 } },
+                layout: { padding: { top: keadaan.tampilan === 'batang' ? RUANG_ATAS_BATANG : 8, right: 4 } },
                 animation: { duration: 400, easing: 'easeOutQuart' },
                 interaction: { mode: 'index', intersect: false },
                 scales,
@@ -430,7 +540,7 @@ function pasangGrafikArus(kanvas) {
                         yAlign: 'bottom',
                         callbacks: {
                             ...tooltipDasar.callbacks,
-                            title: (item) => periodeAktif().label_lengkap[item[0].dataIndex] ?? '',
+                            title: (item) => emberAktif().label_lengkap[item[0].dataIndex] ?? '',
                             label: (konteks) => `${konteks.dataset.label} ${rupiah(konteks.parsed.y)}`,
                             labelColor: (konteks) => {
                                 const warna = { setor: WARNA.setor, tarik: WARNA.tarik, saldo: WARNA.saldo }[konteks.dataset.kunci];
@@ -444,23 +554,60 @@ function pasangGrafikArus(kanvas) {
         });
     }
 
+    // F2d C.3–C.6: tiga kotak, sparkline, dan baris persamaan mengikuti periode aktif.
+    function perbaruiKotak(periode) {
+        const { ringkasan } = periode;
+        const isi = (wadah, pemilih, teks) => {
+            const el = wadah?.querySelector(pemilih);
+            if (el) el.textContent = teks;
+            return el;
+        };
+
+        elemen.periodeTeks.forEach((el) => {
+            el.textContent = TEKS_PERIODE[keadaan.periode];
+        });
+
+        [
+            ['setor', ringkasan.total_setor, ringkasan.jumlah_setor, ringkasan.sebelumnya.total_setor, WARNA.setor],
+            ['tarik', ringkasan.total_tarik, ringkasan.jumlah_tarik, ringkasan.sebelumnya.total_tarik, WARNA.tarik],
+        ].forEach(([kunci, total, jumlah, sebelum, warna]) => {
+            const wadah = elemen.kotak[kunci];
+            isi(wadah, '[data-arus-nilai]', rupiah(Number(total)));
+            isi(wadah, '[data-arus-jumlah]', `${jumlah} transaksi`);
+            isi(wadah, '[data-arus-banding]', teksBanding(Number(total), Number(sebelum)));
+            gambarSparkline(wadah?.querySelector('[data-arus-spark]'), periode[kunci], warna);
+        });
+
+        const selisih = elemen.kotak.selisih;
+        const bersih = Number(ringkasan.bersih);
+        const nilai = isi(selisih, '[data-arus-nilai]', rupiahBertanda(bersih));
+        if (nilai) {
+            nilai.classList.remove(...KELAS_SELISIH);
+            nilai.classList.add(bersih > 0 ? 'text-naik' : bersih < 0 ? 'text-turun' : 'text-stone-900');
+        }
+        const saldoAwal = Number(ringkasan.saldo_awal);
+        const teksPersen = saldoAwal > 0 ? `${persen((bersih / saldoAwal) * 100)} dari saldo awal` : '';
+        const elPersen = isi(selisih, '[data-arus-persen]', teksPersen);
+        if (elPersen) elPersen.hidden = teksPersen === '';
+        gambarSparkline(selisih?.querySelector('[data-arus-spark]'), periode.saldo, WARNA.saldo);
+
+        if (elemen.persamaan) {
+            isi(elemen.persamaan, '[data-persamaan="saldo_awal"]', rupiah(saldoAwal));
+            isi(elemen.persamaan, '[data-persamaan="total_setor"]', rupiah(Number(ringkasan.total_setor)));
+            isi(elemen.persamaan, '[data-persamaan="total_tarik"]', rupiah(Number(ringkasan.total_tarik)));
+            isi(elemen.persamaan, '[data-persamaan="saldo_akhir"]', rupiah(Number(ringkasan.saldo_akhir)));
+            const sesuai = Math.abs(Number(ringkasan.saldo_akhir) - Number(elemen.persamaan.dataset.totalSaldo)) < 0.005;
+            elemen.persamaan.querySelector('[data-arus-cek="sesuai"]').hidden = !sesuai;
+            elemen.persamaan.querySelector('[data-arus-cek="tidak"]').hidden = sesuai;
+        }
+    }
+
     function perbaruiKepala() {
         const periode = periodeAktif();
         const { ringkasan } = periode;
-        const nada = ringkasan.bersih > 0 ? 'setor' : ringkasan.bersih < 0 ? 'tarik' : 'nol';
-        const kelasChip = {
-            setor: ['bg-setor-50', 'text-setor'],
-            tarik: ['bg-tarik-50', 'text-tarik'],
-            nol: ['bg-stone-100', 'text-stone-500'],
-        };
 
         elemen.saldo.textContent = rupiah(ringkasan.saldo_akhir);
-        elemen.chip.textContent = ringkasan.bersih === 0 ? 'Tidak berubah' : `${rupiahBertanda(ringkasan.bersih)} ${DALAM_PERIODE[keadaan.periode]}`;
-        elemen.chip.classList.remove(...Object.values(kelasChip).flat());
-        elemen.chip.classList.add(...kelasChip[nada]);
-        elemen.setor.textContent = rupiah(ringkasan.total_setor);
-        elemen.tarik.textContent = rupiah(ringkasan.total_tarik);
-        elemen.legendaSaldo.hidden = !(keadaan.tampilan === 'saldo' || keadaan.tampilan === 'gabungan');
+        perbaruiKotak(periode);
 
         elemen.tab.forEach((tombol) => {
             const aktif = tombol.dataset.periode === keadaan.periode;
@@ -476,12 +623,16 @@ function pasangGrafikArus(kanvas) {
             pilihan.setAttribute('aria-checked', pilihan.dataset.tampilan === keadaan.tampilan ? 'true' : 'false');
         });
 
-        // Tabel data di kaki kartu: baris terbaru di atas (C.3).
-        if (elemen.kolomPertama) elemen.kolomPertama.textContent = KOLOM_PERTAMA[keadaan.periode];
-        const baris = periode.label_lengkap
+        // Tabel data di kaki kartu: baris terbaru di atas (C.3), mengikuti ember yang tampil (F2d B.2).
+        const ember = emberAktif();
+        if (elemen.kolomPertama) {
+            elemen.kolomPertama.textContent =
+                ember !== periode ? KOLOM_PERTAMA_BATANG[keadaan.periode] : KOLOM_PERTAMA[keadaan.periode];
+        }
+        const baris = ember.label_lengkap
             .map((label, i) => {
                 const tr = document.createElement('tr');
-                [label, rupiah(periode.setor[i]), rupiah(periode.tarik[i]), rupiah(periode.saldo[i])].forEach((isi, kolom) => {
+                [label, rupiah(ember.setor[i]), rupiah(ember.tarik[i]), rupiah(ember.saldo[i])].forEach((isi, kolom) => {
                     const td = document.createElement('td');
                     td.textContent = isi;
                     if (kolom > 0) td.className = 'num';
@@ -500,7 +651,7 @@ function pasangGrafikArus(kanvas) {
         simpan(KUNCI_SIMPAN.periode, periode);
 
         // Data dianimasikan, grafik tidak dibuat ulang.
-        grafik.data.labels = periodeAktif().label;
+        grafik.data.labels = emberAktif().label;
         grafik.data.datasets.forEach((dataset) => {
             dataset.data = deret(dataset.kunci);
         });
@@ -536,19 +687,46 @@ function pasangGrafikKomposisi(kanvas) {
 
     const data = JSON.parse(sumber.textContent);
     const warna = data.map((item) => WARNA_JENIS[item.nama_jenis] ?? WARNA.sukarela);
+    const saldo = data.map((item) => Math.max(0, Number(item.saldo)));
+    const total = saldo.reduce((a, b) => a + b, 0);
+    const nama = data.map((item) => item.nama_jenis.replace('Simpanan ', ''));
 
-    new Chart(kanvas, {
+    // F2d D.1: isi tengah donat. Default = jenis terbesar (dirender Blade); hover irisan/baris menggantinya.
+    const kartu = kanvas.closest('[data-kartu-komposisi]') ?? document;
+    const tengah = kartu.querySelector('[data-komposisi-tengah]');
+    const baris = [...kartu.querySelectorAll('[data-komposisi-jenis]')];
+    const angka1 = new Intl.NumberFormat('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    let aktif = null;
+
+    function tampilkanTengah(indeks) {
+        if (!tengah || indeks === aktif) return;
+        aktif = indeks;
+        const persenEl = tengah.querySelector('[data-tengah-persen]');
+        const namaEl = tengah.querySelector('[data-tengah-nama]');
+        if (indeks === null) {
+            persenEl.textContent = tengah.dataset.defaultPersen;
+            namaEl.textContent = tengah.dataset.defaultNama;
+        } else {
+            persenEl.textContent = `${angka1.format(total > 0 ? (saldo[indeks] / total) * 100 : 0)}%`;
+            namaEl.textContent = nama[indeks];
+        }
+        baris.forEach((li) => li.classList.toggle('bg-stone-50', indeks !== null && Number(li.dataset.komposisiJenis) === indeks));
+    }
+
+    const grafik = new Chart(kanvas, {
         type: 'doughnut',
         data: {
-            labels: data.map((item) => item.nama_jenis.replace('Simpanan ', '')),
+            labels: nama,
             datasets: [
                 {
-                    data: data.map((item) => Math.max(0, Number(item.saldo))),
+                    data: saldo,
                     backgroundColor: warna,
                     hoverBackgroundColor: warna,
+                    hoverOffset: 4,
                     borderWidth: 0,
-                    spacing: 3,
-                    borderRadius: 6,
+                    // F2d D.2: sedikit lebih ramping.
+                    spacing: 2,
+                    borderRadius: 4,
                 },
             ],
         },
@@ -556,20 +734,35 @@ function pasangGrafikKomposisi(kanvas) {
             responsive: true,
             maintainAspectRatio: false,
             devicePixelRatio: Math.max(window.devicePixelRatio || 1, 2),
-            cutout: '72%',
+            cutout: '76%',
             animation: { duration: 400, easing: 'easeOutQuart' },
+            onHover: (_event, elemen) => tampilkanTengah(elemen.length ? elemen[0].index : null),
             plugins: {
                 legend: { display: false },
                 title: { display: false },
-                tooltip: {
-                    ...tooltipDasar,
-                    callbacks: {
-                        ...tooltipDasar.callbacks,
-                        label: (konteks) => `${konteks.label} ${rupiah(konteks.parsed)}`,
-                    },
-                },
+                // Tooltip dimatikan: tengah donat sudah menjelaskan (D.1).
+                tooltip: { enabled: false },
             },
         },
+    });
+
+    kanvas.addEventListener('mouseleave', () => tampilkanTengah(null));
+
+    // Hover baris daftar menyorot irisannya dan mengganti isi tengah.
+    baris.forEach((li) => {
+        const indeks = Number(li.dataset.komposisiJenis);
+        li.addEventListener('mouseenter', () => {
+            if (saldo[indeks] > 0) {
+                grafik.setActiveElements([{ datasetIndex: 0, index: indeks }]);
+                grafik.update();
+            }
+            tampilkanTengah(indeks);
+        });
+        li.addEventListener('mouseleave', () => {
+            grafik.setActiveElements([]);
+            grafik.update();
+            tampilkanTengah(null);
+        });
     });
 }
 

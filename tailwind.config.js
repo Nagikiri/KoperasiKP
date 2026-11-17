@@ -19,9 +19,12 @@ export default {
                 arang: { DEFAULT: '#1F2328', 700: '#2D333B', 600: '#3D444D', 400: '#8B949E' },
                 merah: { DEFAULT: '#C8102E', 700: '#A50D26', 100: '#F9D3D8', 50: '#FDECEE' },
                 emas: { DEFAULT: '#D4A017', 700: '#9A7410', 50: '#FBF3DC' },
-                // F2c H: palet data final (grafik, garis aksen kartu, ikon, nominal +/-). Badge status tetap emerald/red.
-                setor: { DEFAULT: '#4F6BED', 50: '#EEF1FE' }, // indigo (setoran)
-                tarik: { DEFAULT: '#F0705A', 50: '#FEEFEC' }, // koral (penarikan)
+                // F2d A: palet data (grafik, ikon, nominal setor/tarik). Badge status tetap emerald/red.
+                setor: { DEFAULT: '#3F63A8', 50: '#EDF1F8' }, // biru baja (setoran)
+                tarik: { DEFAULT: '#B85A41', 50: '#F8EDE9' }, // terakota (penarikan)
+                // F2d A.2: HANYA untuk angka selisih bertanda (naik = saldo bertambah).
+                naik: '#2F7D57',
+                turun: '#B3412F',
                 // F2c A.2: latar halaman admin (abu hangat).
                 latar: '#EFEEEB',
             },

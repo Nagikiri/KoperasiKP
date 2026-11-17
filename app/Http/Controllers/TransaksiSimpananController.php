@@ -109,15 +109,23 @@ class TransaksiSimpananController extends Controller
 
     public function riwayat(Request $request): View
     {
+        // F2d H.2.1: tiga kunci filter dashboard ikut diterima (sejalan F4). Nilai tidak valid
+        // untuk cari/jenis_transaksi/rentang menjadi null, sama seperti di dashboard.
+        $jenisTransaksi = $this->stringAtauNull($request->query('jenis_transaksi'));
+        $rentang = $this->stringAtauNull($request->query('rentang'));
+
         $filter = [
             'anggota_id' => $this->stringAtauNull($request->query('anggota_id')),
             'jenis_simpanan_id' => $this->stringAtauNull($request->query('jenis_simpanan_id')),
+            'cari' => $this->stringAtauNull($request->query('cari')),
+            'jenis_transaksi' => in_array($jenisTransaksi, [TransaksiSimpanan::SETOR, TransaksiSimpanan::TARIK], true) ? $jenisTransaksi : null,
+            'rentang' => in_array($rentang, TransaksiSimpanan::RENTANG, true) ? $rentang : null,
         ];
 
         $riwayat = TransaksiSimpanan::query()
             ->with(['anggota', 'jenisSimpanan', 'staff'])
             ->when($filter['anggota_id'], fn ($query, $id) => $query->where('anggota_id', $id))
-            ->when($filter['jenis_simpanan_id'], fn ($query, $id) => $query->where('jenis_simpanan_id', $id))
+            ->filter(array_intersect_key($filter, array_flip(['cari', 'jenis_transaksi', 'jenis_simpanan_id', 'rentang'])))
             ->orderByDesc('tanggal_transaksi')
             ->orderByDesc('id')
             ->paginate(20)

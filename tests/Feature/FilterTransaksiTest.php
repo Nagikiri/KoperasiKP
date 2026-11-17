@@ -182,22 +182,34 @@ class FilterTransaksiTest extends TestCase
         }
         $this->assertSame(['' => false, 'setor' => false, 'tarik' => true], $radio);
 
-        $this->assertSame($wajibId, $xpath->query('//select[@name="jenis_simpanan_id"]/option[@selected]')->item(0)->getAttribute('value'));
-        $this->assertSame('30_hari', $xpath->query('//select[@name="rentang"]/option[@selected]')->item(0)->getAttribute('value'));
+        // F2d E.2: dropdown menu Alpine; nilai lewat input tersembunyi dengan nama parameter yang sama.
+        $this->assertSame(0, $xpath->query('//form[@data-filter-transaksi]//select')->length);
+        $this->assertSame($wajibId, $xpath->query('//input[@type="hidden"][@name="jenis_simpanan_id"]')->item(0)->getAttribute('value'));
+        $this->assertSame('30_hari', $xpath->query('//input[@type="hidden"][@name="rentang"]')->item(0)->getAttribute('value'));
 
-        $opsiJenis = [];
-        foreach ($xpath->query('//select[@name="jenis_simpanan_id"]/option') as $opsi) {
-            $opsiJenis[] = trim($opsi->textContent);
-        }
-        $this->assertSame(['Semua jenis', 'Pokok', 'Wajib', 'Sukarela'], $opsiJenis);
+        $opsi = function (string $nama) use ($xpath): array {
+            $hasil = [];
+            foreach ($xpath->query('//*[@data-dropdown-filter="'.$nama.'"]//*[@role="menu"]/button[@role="menuitemradio"]') as $tombol) {
+                $hasil[trim($tombol->textContent)] = $tombol->getAttribute('aria-checked');
+            }
 
-        $opsiRentang = [];
-        foreach ($xpath->query('//select[@name="rentang"]/option') as $opsi) {
-            $opsiRentang[] = trim($opsi->textContent);
-        }
-        $this->assertSame(['Semua waktu', 'Hari ini', '7 hari', '30 hari', 'Bulan ini'], $opsiRentang);
+            return $hasil;
+        };
+        $this->assertSame(['Semua jenis' => 'false', 'Pokok' => 'false', 'Wajib' => 'true', 'Sukarela' => 'false'], $opsi('jenis_simpanan_id'));
+        $this->assertSame(['Semua waktu' => 'false', 'Hari ini' => 'false', '7 hari' => 'false', '30 hari' => 'true', 'Bulan ini' => 'false'], $opsi('rentang'));
 
-        $this->assertSame('Terapkan', trim($xpath->query('//form[@data-filter-transaksi]//button[@type="submit"]')->item(0)->textContent));
+        // Label tombol menampilkan pilihan aktif.
+        $this->assertSame('Wajib', trim($xpath->query('//*[@data-dropdown-filter="jenis_simpanan_id"]//*[@data-dropdown-label]')->item(0)->textContent));
+        $this->assertSame('30 hari', trim($xpath->query('//*[@data-dropdown-filter="rentang"]//*[@data-dropdown-label]')->item(0)->textContent));
+        $this->assertSame('menu', $xpath->query('//*[@data-dropdown-filter="rentang"]//button[@aria-haspopup]')->item(0)->getAttribute('aria-haspopup'));
+
+        // F2d E.3: tombol "Terapkan" tetap ada, tetapi hanya untuk keyboard/pembaca layar (sr-only).
+        $terapkan = $xpath->query('//form[@data-filter-transaksi]//button[@type="submit"]')->item(0);
+        $this->assertSame('Terapkan', trim($terapkan->textContent));
+        $this->assertStringContainsString('sr-only', $terapkan->getAttribute('class'));
+        // Segmen terkirim langsung; kolom cari TIDAK terkirim otomatis (H.4.4).
+        $this->assertStringContainsString('requestSubmit()', $xpath->query('//input[@name="jenis_transaksi"][@value="setor"]')->item(0)->getAttribute('x-on:change'));
+        $this->assertFalse($xpath->query('//input[@name="cari"]')->item(0)->hasAttribute('x-on:input'));
     }
 
     public function test_tanpa_filter_segmen_semua_terpilih_dan_tanpa_reset(): void
@@ -211,22 +223,51 @@ class FilterTransaksiTest extends TestCase
         $this->assertCount(6, $response->viewData('transaksiTerbaru'));
     }
 
-    public function test_filter_aktif_menampilkan_info_reset_dan_lihat_semua_dengan_filter_sama(): void
+    public function test_filter_aktif_menampilkan_reset_tanpa_baris_info(): void
     {
         $response = $this->actingAs($this->admin)->get(route('dashboard', ['cari' => 'budi', 'rentang' => '30_hari']));
         $xpath = $this->xpath($response->getContent());
 
-        $response->assertSee('Menampilkan 10 transaksi terbaru sesuai filter.');
+        // F2d E.5: baris info dihapus.
+        $response->assertDontSee('data-info-filter', false);
+        $response->assertDontSee('Menampilkan 10 transaksi terbaru sesuai filter.');
         $this->assertSame(route('dashboard').'#transaksi-terbaru', $xpath->query('//a[@data-reset-filter]')->item(0)->getAttribute('href'));
         $this->assertSame('Reset', trim($xpath->query('//a[@data-reset-filter]')->item(0)->textContent));
-
-        $lihat = $xpath->query('//a[@data-lihat-semua-filter]')->item(0);
-        $this->assertSame('Lihat semua', trim($lihat->textContent));
-        $this->assertSame(route('transaksi.riwayat', ['cari' => 'budi', 'rentang' => '30_hari']), $lihat->getAttribute('href'));
 
         // Tautan "Lihat semua" di kepala kartu tetap ke riwayat tanpa filter (F2c I.5).
         $this->assertSame(1, $xpath->query('//a[@href="'.route('transaksi.riwayat').'"][normalize-space()="Lihat semua"]')->length);
         $response->assertDontSee('Lihat semua &rarr;', false);
+    }
+
+    public function test_kaki_lihat_semua_hanya_jika_lebih_dari_sepuluh_dengan_jumlah_dan_filter_sama(): void
+    {
+        // Data awal: 6 transaksi, 3 milik Budi. Tanpa filter 6 <= 10: kaki tidak tampil.
+        $this->assertSame(0, $this->xpath($this->actingAs($this->admin)->get(route('dashboard'))->getContent())
+            ->query('//a[@data-lihat-semua-transaksi]')->length);
+
+        for ($i = 1; $i <= 8; $i++) {
+            $this->buatTransaksi($this->budi, JenisSimpanan::SUKARELA, TransaksiSimpanan::SETOR, 1000 * $i, '2026-11-0'.$i);
+        }
+
+        // Tanpa filter: 14 transaksi.
+        $tautan = $this->xpath($this->actingAs($this->admin)->get(route('dashboard'))->getContent())->query('//a[@data-lihat-semua-transaksi]')->item(0);
+        $this->assertSame('Lihat semua 14 transaksi', trim(preg_replace('/\s+/', ' ', $tautan->textContent)));
+        $this->assertSame(route('transaksi.riwayat'), $tautan->getAttribute('href'));
+
+        // Filter Budi + setor: 2 lama + 8 baru = 10 -> tidak tampil (harus > 10).
+        $parameter = ['cari' => 'budi', 'jenis_transaksi' => 'setor'];
+        $this->assertSame(0, $this->xpath($this->actingAs($this->admin)->get(route('dashboard', $parameter))->getContent())
+            ->query('//a[@data-lihat-semua-transaksi]')->length);
+
+        // Filter Budi saja: 3 lama + 8 baru = 11.
+        $response = $this->actingAs($this->admin)->get(route('dashboard', ['cari' => 'budi', 'rentang' => '']));
+        $response->assertViewHas('jumlahTransaksiCocok', 11);
+        $tautan = $this->xpath($response->getContent())->query('//a[@data-lihat-semua-transaksi]')->item(0);
+        $this->assertSame('Lihat semua 11 transaksi', trim(preg_replace('/\s+/', ' ', $tautan->textContent)));
+        $this->assertSame(route('transaksi.riwayat', ['cari' => 'budi']), $tautan->getAttribute('href'));
+
+        // Jumlah di kaki sama dengan isi halaman riwayat dengan filter yang sama (H.2.1).
+        $this->assertSame(11, $this->actingAs($this->admin)->get($tautan->getAttribute('href'))->viewData('riwayat')->total());
     }
 
     public function test_kosong_karena_filter_menampilkan_pesan_dan_reset(): void

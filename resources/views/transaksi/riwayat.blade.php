@@ -31,11 +31,32 @@
             @endforeach
         </select>
 
+        {{-- F2d H.2.1: filter dari dashboard tetap terbawa saat "Terapkan Filter" (sementara, diganti bilah filter F4). --}}
+        @foreach (['cari', 'jenis_transaksi', 'rentang'] as $kunci)
+            @if ($filter[$kunci] !== null)
+                <input type="hidden" name="{{ $kunci }}" value="{{ $filter[$kunci] }}">
+            @endif
+        @endforeach
+
         <button type="submit">Terapkan Filter</button>
         @if ($filter['anggota_id'] !== null || $filter['jenis_simpanan_id'] !== null)
             <a href="{{ route('transaksi.riwayat') }}">Reset Filter</a>
         @endif
     </form>
+
+    @php
+        $filterDashboard = array_filter([
+            $filter['jenis_transaksi'] !== null ? ($filter['jenis_transaksi'] === \App\Models\TransaksiSimpanan::SETOR ? 'Setoran' : 'Penarikan') : null,
+            $filter['rentang'] !== null ? ['hari_ini' => 'Hari ini', '7_hari' => '7 hari', '30_hari' => '30 hari', 'bulan_ini' => 'Bulan ini'][$filter['rentang']] : null,
+            $filter['cari'] !== null ? '"'.$filter['cari'].'"' : null,
+        ]);
+    @endphp
+    @if ($filterDashboard)
+        <p data-filter-dashboard>
+            Juga difilter: {{ implode(' · ', $filterDashboard) }}
+            <a href="{{ route('transaksi.riwayat', array_filter(['anggota_id' => $filter['anggota_id'], 'jenis_simpanan_id' => $filter['jenis_simpanan_id']], fn ($nilai) => $nilai !== null)) }}">Hapus</a>
+        </p>
+    @endif
 
     @if ($riwayat->isEmpty())
         <p>Belum ada transaksi.</p>

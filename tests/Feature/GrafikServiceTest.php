@@ -59,9 +59,15 @@ class GrafikServiceTest extends TestCase
         $this->assertSame('enam_bulan', $arus['default']);
         $this->assertSame(self::PERIODE, array_keys($arus['periode']));
 
-        foreach ($arus['periode'] as $periode) {
-            $this->assertSame(['nama', 'mulai', 'selesai', 'label', 'label_lengkap', 'setor', 'tarik', 'saldo', 'ringkasan'], array_keys($periode));
-            $this->assertSame(['total_setor', 'total_tarik', 'bersih', 'saldo_awal', 'saldo_akhir'], array_keys($periode['ringkasan']));
+        foreach ($arus['periode'] as $kunci => $periode) {
+            // F2d B.1: kunci `batang` hanya untuk periode yang embernya > 13.
+            $batang = in_array($kunci, ['bulan', 'lima_tahun'], true) ? ['batang'] : [];
+            $this->assertSame(['nama', 'mulai', 'selesai', 'label', 'label_lengkap', 'setor', 'tarik', 'saldo', 'ringkasan', ...$batang], array_keys($periode));
+            if ($batang) {
+                $this->assertSame(['label', 'label_lengkap', 'setor', 'tarik', 'saldo'], array_keys($periode['batang']));
+            }
+            $this->assertSame(['total_setor', 'total_tarik', 'bersih', 'saldo_awal', 'saldo_akhir', 'jumlah_setor', 'jumlah_tarik', 'sebelumnya'], array_keys($periode['ringkasan']));
+            $this->assertSame(['total_setor', 'total_tarik'], array_keys($periode['ringkasan']['sebelumnya']));
         }
 
         $this->assertSame('6 bulan terakhir', $arus['periode']['enam_bulan']['nama']);
@@ -130,14 +136,16 @@ class GrafikServiceTest extends TestCase
         $periode = $this->arus()['periode'];
 
         $minggu = $periode['minggu'];
-        $this->assertSame(['total_setor' => 200000.0, 'total_tarik' => 50000.0, 'bersih' => 150000.0, 'saldo_awal' => 1340000.0, 'saldo_akhir' => 1490000.0], $minggu['ringkasan']);
+        $this->assertSame(['total_setor' => 200000.0, 'total_tarik' => 50000.0, 'bersih' => 150000.0, 'saldo_awal' => 1340000.0, 'saldo_akhir' => 1490000.0,
+            'jumlah_setor' => 1, 'jumlah_tarik' => 1, 'sebelumnya' => ['total_setor' => 1000000.0, 'total_tarik' => 0.0]], $minggu['ringkasan']);
         $this->assertSame(200000.0, $minggu['setor'][0]);
         $this->assertSame(50000.0, $minggu['tarik'][6]);
 
         $enam = $periode['enam_bulan'];
         $this->assertSame([40000.0, 0.0, 0.0, 0.0, 0.0, 1200000.0], $enam['setor']);
         $this->assertSame([0.0, 0.0, 0.0, 0.0, 0.0, 50000.0], $enam['tarik']);
-        $this->assertSame(['total_setor' => 1240000.0, 'total_tarik' => 50000.0, 'bersih' => 1190000.0, 'saldo_awal' => 300000.0, 'saldo_akhir' => 1490000.0], $enam['ringkasan']);
+        $this->assertSame(['total_setor' => 1240000.0, 'total_tarik' => 50000.0, 'bersih' => 1190000.0, 'saldo_awal' => 300000.0, 'saldo_akhir' => 1490000.0,
+            'jumlah_setor' => 3, 'jumlah_tarik' => 1, 'sebelumnya' => ['total_setor' => 300000.0, 'total_tarik' => 0.0]], $enam['ringkasan']);
 
         $this->assertSame(1490000.0, $periode['lima_tahun']['ringkasan']['total_setor'] - $periode['lima_tahun']['ringkasan']['total_tarik']);
     }
@@ -247,6 +255,115 @@ class GrafikServiceTest extends TestCase
         // Saldo tetap terbawa walau tidak ada transaksi di rentang.
         $this->assertSame(100000.0, $arus['periode']['lima_tahun']['ringkasan']['saldo_awal']);
         $this->assertSame(100000.0, $arus['periode']['minggu']['ringkasan']['saldo_akhir']);
+    }
+
+    public function test_ember_batang_bulan_dan_lima_tahun_totalnya_sama_dengan_periode(): void
+    {
+        $this->transaksi(JenisSimpanan::POKOK, 'setor', 500000, '2021-06-01');    // sebelum lima_tahun
+        $this->transaksi(JenisSimpanan::SUKARELA, 'setor', 70000, '2022-01-01');  // batas awal lima_tahun
+        $this->transaksi(JenisSimpanan::SUKARELA, 'tarik', 20000, '2024-07-15');
+        $this->transaksi(JenisSimpanan::SUKARELA, 'setor', 300000, '2026-10-13'); // tepat sebelum bulan
+        $this->transaksi(JenisSimpanan::SUKARELA, 'setor', 100000, '2026-10-14'); // batas awal bulan (Rabu)
+        $this->transaksi(JenisSimpanan::SUKARELA, 'setor', 40000, '2026-10-19');  // Senin
+        $this->transaksi(JenisSimpanan::SUKARELA, 'tarik', 15000, '2026-11-12');  // hari ini
+
+        $periode = $this->arus()['periode'];
+
+        foreach (['minggu', 'tiga_bulan', 'enam_bulan', 'tahun'] as $kunci) {
+            $this->assertArrayNotHasKey('batang', $periode[$kunci]);
+        }
+
+        foreach (['bulan', 'lima_tahun'] as $kunci) {
+            $p = $periode[$kunci];
+            $this->assertSame($p['ringkasan']['total_setor'], round(array_sum($p['batang']['setor']), 2), "{$kunci} setor");
+            $this->assertSame($p['ringkasan']['total_tarik'], round(array_sum($p['batang']['tarik']), 2), "{$kunci} tarik");
+            $this->assertSame($p['ringkasan']['saldo_akhir'], $p['batang']['saldo'][count($p['batang']['saldo']) - 1], "{$kunci} saldo");
+        }
+
+        // bulan: 14 Okt (Rabu) s.d. 12 Nov (Kamis) = 5 minggu, dipotong di kedua ujung.
+        $bulan = $periode['bulan']['batang'];
+        $this->assertSame(['14 Okt', '19 Okt', '26 Okt', '2 Nov', '9 Nov'], $bulan['label']);
+        $this->assertSame("14\u{2013}18 Oktober 2026", $bulan['label_lengkap'][0]);
+        $this->assertSame("9\u{2013}12 November 2026", $bulan['label_lengkap'][4]);
+        $this->assertSame([100000.0, 40000.0, 0.0, 0.0, 0.0], $bulan['setor']);
+        $this->assertSame(15000.0, $bulan['tarik'][4]);
+
+        // lima_tahun: 2022–2026, tahun berjalan terpotong.
+        $lima = $periode['lima_tahun']['batang'];
+        $this->assertSame(['2022', '2023', '2024', '2025', '2026'], $lima['label']);
+        $this->assertSame('2022', $lima['label_lengkap'][0]);
+        $this->assertSame("Januari\u{2013}November 2026", $lima['label_lengkap'][4]);
+        $this->assertSame(570000.0, $lima['saldo'][0]);
+    }
+
+    public function test_ember_batang_tahun_pertama_terpotong(): void
+    {
+        Carbon::setTestNow('2026-05-20 10:00:00'); // K2 2026: 20 kuartal dimulai K3 2021 (1 Juli 2021)
+
+        $batang = $this->arus()['periode']['lima_tahun']['batang'];
+
+        $this->assertSame(['2021', '2022', '2023', '2024', '2025', '2026'], $batang['label']);
+        $this->assertSame("Juli\u{2013}Desember 2021", $batang['label_lengkap'][0]);
+        $this->assertSame("Januari\u{2013}Mei 2026", $batang['label_lengkap'][5]);
+    }
+
+    public function test_jumlah_transaksi_dihitung_per_baris(): void
+    {
+        $this->transaksi(JenisSimpanan::SUKARELA, 'setor', 10000, '2026-11-10');
+        $this->transaksi(JenisSimpanan::WAJIB, 'setor', 20000, '2026-11-10'); // tanggal sama: tetap dua baris
+        $this->transaksi(JenisSimpanan::SUKARELA, 'tarik', 5000, '2026-11-11');
+        $this->transaksi(JenisSimpanan::SUKARELA, 'setor', 30000, '2026-11-05'); // di luar minggu
+
+        $periode = $this->arus()['periode'];
+
+        $this->assertSame(2, $periode['minggu']['ringkasan']['jumlah_setor']);
+        $this->assertSame(1, $periode['minggu']['ringkasan']['jumlah_tarik']);
+        $this->assertSame(3, $periode['bulan']['ringkasan']['jumlah_setor']);
+        $this->assertSame(1, $periode['bulan']['ringkasan']['jumlah_tarik']);
+    }
+
+    public function test_jendela_sebelumnya_minggu_sama_panjang_tepat_sebelum_mulai(): void
+    {
+        // minggu: 6–12 Nov (7 hari) -> sebelumnya 30 Okt–5 Nov.
+        $this->transaksi(JenisSimpanan::SUKARELA, 'setor', 1000, '2026-10-29');  // di luar jendela
+        $this->transaksi(JenisSimpanan::SUKARELA, 'setor', 2000, '2026-10-30');  // batas awal sebelumnya
+        $this->transaksi(JenisSimpanan::SUKARELA, 'tarik', 500, '2026-11-05');   // batas akhir sebelumnya
+        $this->transaksi(JenisSimpanan::SUKARELA, 'setor', 7000, '2026-11-06');  // masuk periode, bukan sebelumnya
+
+        $ringkasan = $this->arus()['periode']['minggu']['ringkasan'];
+
+        $this->assertSame(['total_setor' => 2000.0, 'total_tarik' => 500.0], $ringkasan['sebelumnya']);
+        $this->assertSame(7000.0, $ringkasan['total_setor']);
+    }
+
+    public function test_jendela_sebelumnya_enam_bulan_sama_jumlah_hari(): void
+    {
+        // enam_bulan: 1 Jun–12 Nov 2026 = 165 hari -> sebelumnya 18 Des 2025–31 Mei 2026.
+        $this->transaksi(JenisSimpanan::SUKARELA, 'setor', 1000, '2025-12-17');  // di luar jendela
+        $this->transaksi(JenisSimpanan::SUKARELA, 'setor', 2000, '2025-12-18');  // batas awal sebelumnya
+        $this->transaksi(JenisSimpanan::SUKARELA, 'tarik', 300, '2026-05-31');   // batas akhir sebelumnya
+        $this->transaksi(JenisSimpanan::SUKARELA, 'setor', 4000, '2026-06-01');  // masuk periode
+
+        $ringkasan = $this->arus()['periode']['enam_bulan']['ringkasan'];
+
+        $this->assertSame(['total_setor' => 2000.0, 'total_tarik' => 300.0], $ringkasan['sebelumnya']);
+        $this->assertSame(4000.0, $ringkasan['total_setor']);
+        $this->assertSame(2700.0, $ringkasan['saldo_awal']);
+    }
+
+    public function test_jendela_sebelumnya_lima_tahun_terbaca_dari_rentang_query_yang_diperluas(): void
+    {
+        // lima_tahun: 1 Jan 2022–12 Nov 2026 = 1777 hari -> sebelumnya mulai 19 Feb 2017.
+        $this->transaksi(JenisSimpanan::SUKARELA, 'setor', 1000, '2017-02-18');  // di luar jendela, masuk saldo awal
+        $this->transaksi(JenisSimpanan::SUKARELA, 'setor', 2000, '2017-02-19');  // batas awal sebelumnya
+        $this->transaksi(JenisSimpanan::SUKARELA, 'setor', 3000, '2021-12-31');
+
+        $arus = $this->arus();
+        $ringkasan = $arus['periode']['lima_tahun']['ringkasan'];
+
+        $this->assertFalse($arus['ada_data']);
+        $this->assertSame(['total_setor' => 5000.0, 'total_tarik' => 0.0], $ringkasan['sebelumnya']);
+        $this->assertSame(6000.0, $ringkasan['saldo_awal']);
     }
 
     public function test_hanya_dua_query(): void
