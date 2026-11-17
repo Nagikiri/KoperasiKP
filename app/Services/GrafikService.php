@@ -11,10 +11,8 @@ class GrafikService
      * Data grafik "Arus simpanan" di dashboard (F2b A.1) untuk enam periode
      * sekaligus, supaya pilihan periode di browser tidak butuh request baru.
      *
-     * Dua query saja: (1) saldo sebelum awal rentang query, (2) agregasi setor/tarik
-     * (nominal dan jumlah baris) per tanggal. Rentang query = lima_tahun ditambah jendela
-     * "sebelumnya" miliknya (F2d C.4, H.6.2), supaya perbandingan dengan periode
-     * sebelumnya tidak butuh query baru.
+     * Dua query saja: (1) saldo sebelum awal rentang terpanjang (lima_tahun),
+     * (2) agregasi setor/tarik (nominal dan jumlah baris) per tanggal dalam rentang lima_tahun.
      * Pengelompokan ke ember dilakukan di PHP, tanpa fungsi tanggal khusus database.
      *
      * Asumsi: tidak ada transaksi bertanggal masa depan (BR-10), jadi saldo ember
@@ -35,10 +33,8 @@ class GrafikService
             'lima_tahun' => ['nama' => '5 tahun terakhir', 'ember' => $this->emberKuartalan($hariIni, 20)],
         ];
 
-        $mulaiLimaTahun = $definisi['lima_tahun']['ember'][0]['mulai'];
-
-        // F2d C.4, H.6.2: rentang query diperluas ke awal jendela "sebelumnya" milik lima_tahun.
-        $mulaiQuery = $mulaiLimaTahun->copy()->subDays($this->panjangHari($mulaiLimaTahun, $hariIni));
+        // F2d I.1.4: rentang query kembali ke awal lima_tahun (perbandingan "sebelumnya" dihapus).
+        $mulaiQuery = $definisi['lima_tahun']['ember'][0]['mulai'];
 
         $saldoSebelumRentang = round((float) TransaksiSimpanan::query()
             ->whereDate('tanggal_transaksi', '<', $mulaiQuery->toDateString())
@@ -71,15 +67,6 @@ class GrafikService
                 $perTanggal[$kunci]['jumlah_tarik'] += (int) $baris->jumlah_tarik;
             });
 
-        // F2d H.2.2: ada_data hanya dari transaksi di rentang lima_tahun, bukan rentang query yang diperluas.
-        $adaData = false;
-        foreach (array_keys($perTanggal) as $tanggal) {
-            if ($tanggal >= $mulaiLimaTahun->toDateString()) {
-                $adaData = true;
-                break;
-            }
-        }
-
         $periode = [];
         foreach ($definisi as $kunci => $item) {
             $periode[$kunci] = $this->hitungPeriode($item['nama'], $item['ember'], $perTanggal, $saldoSebelumRentang, $hariIni);
@@ -98,14 +85,8 @@ class GrafikService
         return [
             'default' => 'enam_bulan',
             'periode' => $periode,
-            'ada_data' => $adaData,
+            'ada_data' => $perTanggal !== [],
         ];
-    }
-
-    /** Jumlah hari dari $mulai sampai $hariIni, inklusif. */
-    private function panjangHari(Carbon $mulai, Carbon $hariIni): int
-    {
-        return (int) round(abs($mulai->copy()->startOfDay()->diffInDays($hariIni->copy()->startOfDay()))) + 1;
     }
 
     /**
@@ -125,20 +106,10 @@ class GrafikService
         $jumlahSetor = 0;
         $jumlahTarik = 0;
 
-        // F2d H.3.1: jendela "sebelumnya" = jumlah hari yang sama persis, tepat sebelum `mulai`.
-        $mulaiSebelumnya = $ember[0]['mulai']->copy()->subDays($this->panjangHari($ember[0]['mulai'], $hariIni))->toDateString();
-        $sebelumnyaSetor = 0.0;
-        $sebelumnyaTarik = 0.0;
-
         foreach ($perTanggal as $tanggal => $nilai) {
             if ($tanggal < $mulai) {
                 // Transaksi sebelum rentang periode ini ikut ke saldo awal.
                 $saldoAwal += $nilai['setor'] - $nilai['tarik'];
-
-                if ($tanggal >= $mulaiSebelumnya) {
-                    $sebelumnyaSetor += $nilai['setor'];
-                    $sebelumnyaTarik += $nilai['tarik'];
-                }
 
                 continue;
             }
@@ -183,13 +154,9 @@ class GrafikService
                 'bersih' => round($totalSetor - $totalTarik, 2),
                 'saldo_awal' => round($saldoAwal, 2),
                 'saldo_akhir' => $saldo[$jumlahEmber - 1],
-                // F2d C.4
+                // F2d C.4 (I.1.4: `sebelumnya` dihapus)
                 'jumlah_setor' => $jumlahSetor,
                 'jumlah_tarik' => $jumlahTarik,
-                'sebelumnya' => [
-                    'total_setor' => round($sebelumnyaSetor, 2),
-                    'total_tarik' => round($sebelumnyaTarik, 2),
-                ],
             ],
         ];
     }

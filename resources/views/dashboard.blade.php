@@ -19,7 +19,13 @@
 
     // D.1 kalimat status, dipilih berurutan (teks F2c F).
     if ($jumlahBelumSetorWajib > 0) {
-        $kalimatStatus = 'Ada '.$jumlahBelumSetorWajib.' anggota yang belum setor wajib bulan ini.';
+        // F2d I.5: tetap dari belum setor wajib BULAN INI; "{n} anggota" menjadi tautan ke kartu.
+        $kalimatStatus = new \Illuminate\Support\HtmlString(
+            'Ada <a href="#belum-setor-wajib" data-tautan-belum-wajib class="font-medium text-stone-900 underline decoration-stone-300 underline-offset-2 hover:decoration-stone-500">'
+            .e($jumlahBelumSetorWajib.' anggota').'</a> yang belum setor wajib bulan ini'
+            .($jumlahBelumSetorWajibDuaBulan > 0 ? e(', '.$jumlahBelumSetorWajibDuaBulan.' di antaranya juga belum bulan lalu') : '')
+            .'.'
+        );
     } elseif ($aktivitasHariIni['jumlah_transaksi'] > 0) {
         $kalimatStatus = 'Hari ini sudah ada '.$aktivitasHariIni['jumlah_transaksi'].' transaksi.';
     } else {
@@ -79,30 +85,19 @@
     $tabPeriode = ['minggu' => '1 Mgg', 'bulan' => '1 Bln', 'tiga_bulan' => '3 Bln', 'enam_bulan' => '6 Bln', 'tahun' => '1 Thn', 'lima_tahun' => '5 Thn'];
     $pilihanTampilan = ['garis' => 'Garis', 'batang' => 'Batang', 'saldo' => 'Saldo', 'gabungan' => 'Gabungan'];
 
-    // F2d C.3 tiga kotak arus; teks dan rumus yang sama ada di arus-simpanan.js.
+    // F2d C.3, I.1 tiga kotak arus: label, nominal, jumlah transaksi. Teks yang sama ada di arus-simpanan.js.
     $teksPeriode = ['minggu' => '7 hari', 'bulan' => '30 hari', 'tiga_bulan' => '3 bulan', 'enam_bulan' => '6 bulan', 'tahun' => '1 tahun', 'lima_tahun' => '5 tahun'];
-    $persen = function (float $nilai): string {
-        $bulat = round($nilai, 1);
-
-        return ($bulat > 0 ? '+' : ($bulat < 0 ? '-' : '')).number_format(abs($bulat), 1, ',', '.').'%';
-    };
-    // Persen setor/tarik netral (abu). Periode sebelumnya 0 -> "—".
-    $teksBanding = fn ($sekarang, $sebelum) => (float) $sebelum == 0.0
-        ? '— vs sebelumnya'
-        : $persen(((float) $sekarang - (float) $sebelum) / (float) $sebelum * 100).' vs sebelumnya';
-    // Disembunyikan jika saldo awal <= 0.
-    $teksPersenSaldo = fn (array $r) => (float) $r['saldo_awal'] > 0 ? $persen((float) $r['bersih'] / (float) $r['saldo_awal'] * 100).' dari saldo awal' : '';
     $kotakArus = [
         ['kunci' => 'setor', 'nama' => 'Setoran', 'titik' => 'bg-setor', 'nilai' => Format::rupiah($ringkasanAwal['total_setor']), 'warna' => 'text-stone-900',
-            'jumlah' => $ringkasanAwal['jumlah_setor'].' transaksi', 'bawah' => $teksBanding($ringkasanAwal['total_setor'], $ringkasanAwal['sebelumnya']['total_setor'])],
+            'jumlah' => $ringkasanAwal['jumlah_setor']],
         ['kunci' => 'tarik', 'nama' => 'Penarikan', 'titik' => 'bg-tarik', 'nilai' => Format::rupiah($ringkasanAwal['total_tarik']), 'warna' => 'text-stone-900',
-            'jumlah' => $ringkasanAwal['jumlah_tarik'].' transaksi', 'bawah' => $teksBanding($ringkasanAwal['total_tarik'], $ringkasanAwal['sebelumnya']['total_tarik'])],
-        // Titik emas = warna garis saldo (H.3.7), jadi legenda Saldo terwakili di sini.
+            'jumlah' => $ringkasanAwal['jumlah_tarik']],
+        // Titik emas = warna garis saldo (H.3.7). Jumlah transaksi = setor + tarik (I.1.2).
         ['kunci' => 'selisih', 'nama' => 'Selisih bersih', 'titik' => 'bg-[#C8930E]', 'nilai' => $bertanda($ringkasanAwal['bersih']), 'warna' => $warnaBersih[$nadaTanda($ringkasanAwal['bersih'])],
-            'jumlah' => $teksPersenSaldo($ringkasanAwal), 'bawah' => null],
+            'jumlah' => $ringkasanAwal['jumlah_setor'] + $ringkasanAwal['jumlah_tarik']],
     ];
-    // F2d C.5, H.3.6: saldo akhir grafik dibandingkan dengan total rekapPerJenis (dua sumber berbeda).
-    $saldoSesuai = abs((float) $ringkasanAwal['saldo_akhir'] - (float) $totalSaldo) < 0.005;
+    // I.1.3: nominal dipecah "Rp" | angka, supaya hanya boleh turun baris setelah "Rp".
+    $pecahRp = fn (string $teks) => explode(' ', $teks, 2) + [1 => ''];
     $persamaan = [
         ['kunci' => 'saldo_awal', 'label' => 'Saldo awal', 'nilai' => $rupiahMinus($ringkasanAwal['saldo_awal']), 'operator' => '+'],
         ['kunci' => 'total_setor', 'label' => 'Setoran', 'nilai' => Format::rupiah($ringkasanAwal['total_setor']), 'operator' => '-'],
@@ -146,26 +141,17 @@
                     <p data-arus-diperbarui class="mt-0.5 text-xs text-stone-400">Diperbarui {{ now()->translatedFormat('j M, H.i') }}</p>
                     <p data-arus-saldo class="mt-1 whitespace-nowrap text-[28px] font-semibold leading-tight text-stone-900 tabular-nums">{{ $rupiahMinus($ringkasanAwal['saldo_akhir']) }}</p>
 
-                    {{-- F2d C.3, H.4.2: tiga kotak sama tinggi; baris 2 = nominal + sparkline. --}}
+                    {{-- F2d I.1: tiga kotak sama tinggi; isi = label, nominal (tanpa terpotong/ellipsis), jumlah transaksi. --}}
                     <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
                         @foreach ($kotakArus as $kotak)
-                            <div data-arus-kotak="{{ $kotak['kunci'] }}" class="flex min-w-0 flex-col rounded-xl border border-stone-200 bg-stone-50/60 p-4">
+                            @php [$rp, $angka] = $pecahRp($kotak['nilai']); @endphp
+                            <div data-arus-kotak="{{ $kotak['kunci'] }}" class="flex min-w-0 flex-col rounded-xl border border-stone-200 bg-stone-50/60 p-4 [container-type:inline-size]">
                                 <p class="flex items-center gap-1.5 truncate text-xs text-stone-500">
                                     <span class="h-2 w-2 shrink-0 rounded-full {{ $kotak['titik'] }}" aria-hidden="true"></span>
                                     <span class="truncate">{{ $kotak['nama'] }} · <span data-arus-periode-teks>{{ $teksPeriode[$grafikArus['default']] }}</span></span>
                                 </p>
-                                <div class="mt-1.5 flex items-center justify-between gap-2">
-                                    <p data-arus-nilai class="truncate text-lg font-semibold tabular-nums {{ $kotak['warna'] }}">{{ $kotak['nilai'] }}</p>
-                                    @if ($grafikArus['ada_data'])
-                                        <span data-arus-spark class="block h-7 w-[72px] shrink-0" aria-hidden="true"></span>
-                                    @endif
-                                </div>
-                                @if ($kotak['kunci'] === 'selisih')
-                                    <p data-arus-persen class="mt-1 text-xs text-stone-500 tabular-nums" @if ($kotak['jumlah'] === '') hidden @endif>{{ $kotak['jumlah'] }}</p>
-                                @else
-                                    <p data-arus-jumlah class="mt-1 text-xs text-stone-500 tabular-nums">{{ $kotak['jumlah'] }}</p>
-                                    <p data-arus-banding class="mt-0.5 text-xs text-stone-500 tabular-nums">{{ $kotak['bawah'] }}</p>
-                                @endif
+                                <p data-arus-nilai class="mt-1.5 text-[clamp(16px,9cqi,24px)] font-semibold leading-tight tabular-nums {{ $kotak['warna'] }}"><span data-nilai-rp class="whitespace-nowrap">{{ $rp }}</span> <span data-nilai-angka class="whitespace-nowrap">{{ $angka }}</span></p>
+                                <p data-arus-jumlah class="mt-1 text-xs text-stone-500 tabular-nums">{{ $kotak['jumlah'] }} transaksi</p>
                             </div>
                         @endforeach
                     </div>
@@ -215,7 +201,7 @@
                     <script type="application/json" id="data-grafik">@json($grafikArus)</script>
 
                     {{-- F2d C.5 baris persamaan: saldo awal + setoran - penarikan = saldo akhir. --}}
-                    <div data-arus-persamaan data-total-saldo="{{ $totalSaldo }}" class="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 px-6 pb-5">
+                    <div data-arus-persamaan class="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 px-6 pb-5">
                         <div class="grid flex-1 grid-cols-2 gap-x-4 gap-y-3 sm:flex sm:flex-none sm:items-end sm:gap-3">
                             @foreach ($persamaan as $suku)
                                 <div class="min-w-0">
@@ -227,12 +213,6 @@
                                 @endif
                             @endforeach
                         </div>
-                        <span data-arus-cek="sesuai" @if (! $saldoSesuai) hidden @endif class="inline-flex items-center gap-1 text-xs text-stone-500">
-                            <x-ui.icon name="check-circle" class="h-4 w-4 text-stone-400" />Sesuai
-                        </span>
-                        <span data-arus-cek="tidak" @if ($saldoSesuai) hidden @endif title="Saldo akhir grafik berbeda dengan total simpanan" class="inline-flex items-center gap-1 text-xs font-medium text-emas-700">
-                            <x-ui.icon name="exclamation-triangle" class="h-4 w-4" />Tidak sesuai
-                        </span>
                     </div>
                 @else
                     <x-ui.empty class="flex-1 justify-center" icon="chart-bar" title="Belum ada transaksi" description="Grafik akan terisi setelah ada setoran atau penarikan." />
@@ -298,13 +278,9 @@
                     'persen' => $adaSaldo ? max(0.0, (float) $r['saldo']) / (float) $totalSaldo * 100 : 0.0,
                 ])->all();
                 $persenTeks = fn (float $nilai) => number_format($nilai, 1, ',', '.').'%';
-                $indeksTerbesar = $indeksTerkecil = $indeksKedua = null;
+                $indeksTerbesar = null;
                 foreach ($porsi as $i => $p) {
                     if ($indeksTerbesar === null || $p['saldo'] > $porsi[$indeksTerbesar]['saldo']) $indeksTerbesar = $i;
-                    if ($indeksTerkecil === null || $p['saldo'] < $porsi[$indeksTerkecil]['saldo']) $indeksTerkecil = $i;
-                }
-                foreach ($porsi as $i => $p) {
-                    if ($i !== $indeksTerbesar && ($indeksKedua === null || $p['saldo'] > $porsi[$indeksKedua]['saldo'])) $indeksKedua = $i;
                 }
             @endphp
 
@@ -347,19 +323,45 @@
                 <span class="w-32 text-right tabular-nums">{{ Format::rupiah($totalSaldo) }}</span>
             </div>
 
-            {{-- D.4 ringkasan (tanpa jenis terbesar, sudah ada di tengah donat; rata-rata dihapus H.3.9). --}}
+            {{-- F2d I.3 ringkasan: semua nilai dari $ringkasanSebaran (database), tanpa nama jenis/angka yang diketik di sini.
+                 Kelompok 1 dijumlahkan = baris Total. --}}
             @if ($adaSaldo)
-                <div class="my-3 border-t border-dashed border-stone-200"></div>
-                <dl data-komposisi-ringkasan class="space-y-2 text-sm">
-                    <div class="flex items-center justify-between gap-3" data-ringkasan-baris>
-                        <dt class="text-stone-500">Terkecil</dt>
-                        <dd class="font-semibold text-stone-900 tabular-nums">{{ $porsi[$indeksTerkecil]['nama'] }} · {{ $persenTeks($porsi[$indeksTerkecil]['persen']) }}</dd>
-                    </div>
-                    <div class="flex items-center justify-between gap-3" data-ringkasan-baris>
-                        <dt class="text-stone-500">Selisih {{ $porsi[$indeksTerbesar]['nama'] }} – {{ $porsi[$indeksKedua]['nama'] }}</dt>
-                        <dd class="font-semibold text-stone-900 tabular-nums">{{ Format::rupiah($porsi[$indeksTerbesar]['saldo'] - $porsi[$indeksKedua]['saldo']) }}</dd>
-                    </div>
-                </dl>
+                <div data-komposisi-ringkasan class="mt-3 text-sm">
+                    <dl class="space-y-2" data-ringkasan-kelompok="saldo">
+                        <div class="flex items-center justify-between gap-3" data-ringkasan-baris="bisa_ditarik">
+                            <dt class="text-stone-500">Bisa ditarik anggota</dt>
+                            <dd class="font-semibold text-stone-900 tabular-nums">{{ Format::rupiah($ringkasanSebaran['bisa_ditarik']) }}</dd>
+                        </div>
+                        <div class="flex items-center justify-between gap-3" data-ringkasan-baris="tertahan">
+                            <dt class="text-stone-500">Tertahan (pokok + wajib)</dt>
+                            <dd class="font-semibold text-stone-900 tabular-nums">{{ Format::rupiah($ringkasanSebaran['tertahan']) }}</dd>
+                        </div>
+                        @if ($ringkasanSebaran['milik_nonaktif'] > 0)
+                            <div class="flex items-center justify-between gap-3" data-ringkasan-baris="milik_nonaktif">
+                                <dt class="text-stone-500">Milik anggota nonaktif</dt>
+                                <dd class="font-semibold text-stone-900 tabular-nums">{{ Format::rupiah($ringkasanSebaran['milik_nonaktif']) }}</dd>
+                            </div>
+                        @endif
+                    </dl>
+
+                    <div class="my-3 border-t border-dashed border-stone-200"></div>
+
+                    <dl class="space-y-2" data-ringkasan-kelompok="anggota">
+                        @if ($ringkasanSebaran['rata_rata_aktif'] !== null)
+                            <div class="flex items-center justify-between gap-3" data-ringkasan-baris="rata_rata_aktif">
+                                <dt class="text-stone-500">Rata-rata per anggota aktif</dt>
+                                <dd class="font-semibold text-stone-900 tabular-nums">{{ Format::rupiah($ringkasanSebaran['rata_rata_aktif']) }}</dd>
+                            </div>
+                        @endif
+                        <div class="flex items-start justify-between gap-3" data-ringkasan-baris="wajib_masuk_bulan_ini">
+                            <dt class="text-stone-500">Wajib masuk bulan ini</dt>
+                            <dd class="text-right">
+                                <span class="block font-semibold text-stone-900 tabular-nums">{{ Format::rupiah($ringkasanSebaran['wajib_masuk_bulan_ini']) }}</span>
+                                <span data-wajib-sudah class="block text-xs text-stone-500 tabular-nums">{{ $ringkasanSebaran['sudah_setor_wajib'] }} dari {{ $ringkasanSebaran['anggota_aktif'] }} anggota</span>
+                            </dd>
+                        </div>
+                    </dl>
+                </div>
             @endif
         </x-ui.card>
 
@@ -432,6 +434,11 @@
                     </div>
                 </div>
 
+                {{-- F2d I.4: pilihan kartu belum setor wajib ikut terbawa. --}}
+                @if ($wajib['pilihan'] !== '')
+                    <input type="hidden" name="wajib" value="{{ $wajib['pilihan'] }}">
+                @endif
+
                 {{-- E.3: tetap ada untuk keyboard dan pembaca layar. --}}
                 <button type="submit" class="sr-only">Terapkan</button>
             </form>
@@ -499,76 +506,122 @@
         </x-ui.card>
 
         @php
-            // F2d F: dua daftar (bulan ini / bulan lalu). F.3: baris yang tampil sebelum "Lihat semua";
+            // F2d I.4: satu daftar sesuai pilihan `wajib` (server). F.3: baris yang tampil sebelum "Lihat semua";
             // dihitung dari tinggi kartu Transaksi terbaru (10 baris) di sebelahnya, lihat Laporan.
             $batasBarisWajib = 12;
-            $daftarWajib = [
-                'ini' => ['daftar' => $belumSetorWajib, 'jumlah' => $jumlahBelumSetorWajib, 'label' => 'Bulan ini', 'kosong' => 'Semua anggota aktif sudah setor wajib bulan ini.'],
-                'lalu' => ['daftar' => $belumSetorWajibBulanLalu, 'jumlah' => $jumlahBelumSetorWajibBulanLalu, 'label' => 'Bulan lalu', 'kosong' => 'Semua anggota aktif sudah setor wajib bulan lalu.'],
-            ];
+            $kunciDaftar = $wajib['pilihan'] === '' ? 'ini' : $wajib['pilihan'];
+            $opsiWajibAtas = ['' => 'Bulan ini', 'lalu' => 'Bulan lalu'];
+            $opsiTunggakan = ['tunggakan_3' => 'Tunggakan 3 bulan', 'tunggakan_6' => 'Tunggakan 6 bulan', 'tunggakan_12' => 'Tunggakan 12 bulan'];
+            $pilihBulanAktif = isset($wajib['opsi_bulan'][$wajib['pilihan']]);
+            $kelasOpsi = 'group flex w-full items-center justify-between px-3 py-2 text-left text-sm text-stone-700 hover:bg-stone-50 focus:bg-stone-50 focus:outline-none aria-checked:font-medium aria-checked:text-stone-900';
         @endphp
-        {{-- F2c E, F2d F: Belum setor wajib --}}
-        <x-ui.card class="col-span-12 flex h-full flex-col xl:col-span-4" padding="none" data-kartu-tindak-lanjut
-                   x-data="{ bulan: 'ini', semua: false, tinggi: null, jumlah: { ini: {{ $jumlahBelumSetorWajib }}, lalu: {{ $jumlahBelumSetorWajibBulanLalu }} } }">
+        {{-- F2c E, F2d F/I.4: Belum setor wajib --}}
+        <x-ui.card id="belum-setor-wajib" class="col-span-12 flex h-full scroll-mt-8 flex-col xl:col-span-4" padding="none" data-kartu-tindak-lanjut
+                   x-data="{ semua: false, tinggi: null }">
             <x-slot:header>
-                {{-- F.1: baris 1 judul; baris 2 pilihan bulan (kiri) dan badge (kanan). --}}
+                {{-- F.1: baris 1 judul; baris 2 pilihan (kiri) dan badge (kanan). --}}
                 <div class="w-full min-w-0">
                     <h2 class="text-base font-semibold text-stone-900">Belum setor wajib</h2>
                     <div class="mt-3 flex items-center justify-between gap-3">
-                        <div role="group" aria-label="Bulan" data-pilih-bulan-wajib class="inline-flex gap-1">
-                            @foreach ($daftarWajib as $kunci => $isi)
-                                <button type="button" data-bulan-wajib="{{ $kunci }}" aria-pressed="{{ $kunci === 'ini' ? 'true' : 'false' }}"
-                                        x-on:click="bulan = '{{ $kunci }}'; semua = false; tinggi = null"
-                                        x-bind:aria-pressed="(bulan === '{{ $kunci }}').toString()"
-                                        x-bind:class="bulan === '{{ $kunci }}' ? 'bg-arang text-white' : 'text-stone-500 hover:bg-stone-100'"
-                                        class="h-8 rounded-full px-3 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-arang/30 {{ $kunci === 'ini' ? 'bg-arang text-white' : 'text-stone-500 hover:bg-stone-100' }}">{{ $isi['label'] }}</button>
+                        {{-- I.4.1: dropdown menu (pola sama dengan filter transaksi), dikirim lewat `wajib`. Filter transaksi ikut terbawa. --}}
+                        <form method="GET" action="{{ route('dashboard') }}#belum-setor-wajib" data-pilih-wajib class="relative"
+                              x-data="{ buka: false, bulanLain: {{ $pilihBulanAktif ? 'true' : 'false' }} }"
+                              x-on:keydown.escape.window="if (buka) { buka = false; $refs.pemicu.focus() }"
+                              x-on:click.outside="buka = false">
+                            @foreach (array_filter($filterTransaksi, fn ($nilai) => $nilai !== null) as $kunci => $nilai)
+                                <input type="hidden" name="{{ $kunci }}" value="{{ $nilai }}">
                             @endforeach
-                        </div>
-                        <x-ui.badge tone="brand" class="shrink-0 tabular-nums" data-jumlah-belum-setor x-text="jumlah[bulan] + ' anggota'">{{ $jumlahBelumSetorWajib }} anggota</x-ui.badge>
+                            <input type="hidden" name="wajib" value="{{ $wajib['pilihan'] }}" x-ref="nilai">
+
+                            <x-ui.button variant="secondary" size="sm" type="button" x-ref="pemicu" x-on:click="buka = ! buka"
+                                         aria-label="Pilihan belum setor wajib" aria-haspopup="menu" aria-controls="menu-wajib" x-bind:aria-expanded="buka.toString()" aria-expanded="false">
+                                <span data-wajib-label>{{ $wajib['label'] }}</span>
+                                <x-ui.icon name="chevron-down" class="h-4 w-4 text-stone-500" />
+                            </x-ui.button>
+
+                            <div id="menu-wajib" role="menu" aria-label="Pilihan belum setor wajib" x-cloak x-show="buka" x-transition.opacity.duration.100ms
+                                 class="absolute left-0 z-10 mt-2 w-52 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg">
+                                @foreach ($opsiWajibAtas as $nilai => $teks)
+                                    <button type="button" role="menuitemradio" data-wajib-opsi="{{ $nilai }}" aria-checked="{{ $wajib['pilihan'] === (string) $nilai ? 'true' : 'false' }}"
+                                            x-on:click="buka = false; $refs.nilai.value = @js((string) $nilai); $el.closest('form').requestSubmit()" class="{{ $kelasOpsi }}">
+                                        {{ $teks }}
+                                        <span class="hidden h-1.5 w-1.5 rounded-full bg-arang group-aria-checked:block" aria-hidden="true"></span>
+                                    </button>
+                                @endforeach
+
+                                <button type="button" role="menuitem" data-wajib-pilih-bulan aria-controls="menu-wajib-bulan" x-bind:aria-expanded="bulanLain.toString()" aria-expanded="{{ $pilihBulanAktif ? 'true' : 'false' }}"
+                                        x-on:click="bulanLain = ! bulanLain"
+                                        class="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-stone-700 hover:bg-stone-50 focus:bg-stone-50 focus:outline-none">
+                                    Pilih bulan…
+                                    <x-ui.icon name="chevron-down" class="h-4 w-4 text-stone-400 transition-transform" x-bind:class="bulanLain && 'rotate-180'" />
+                                </button>
+                                <div id="menu-wajib-bulan" role="group" aria-label="Pilih bulan" x-show="bulanLain" @if (! $pilihBulanAktif) x-cloak @endif class="max-h-48 overflow-y-auto bg-stone-50/60">
+                                    @foreach ($wajib['opsi_bulan'] as $nilai => $teks)
+                                        <button type="button" role="menuitemradio" data-wajib-opsi="{{ $nilai }}" aria-checked="{{ $wajib['pilihan'] === (string) $nilai ? 'true' : 'false' }}"
+                                                x-on:click="buka = false; $refs.nilai.value = @js((string) $nilai); $el.closest('form').requestSubmit()" class="{{ $kelasOpsi }} pl-6">
+                                            {{ $teks }}
+                                            <span class="hidden h-1.5 w-1.5 rounded-full bg-arang group-aria-checked:block" aria-hidden="true"></span>
+                                        </button>
+                                    @endforeach
+                                </div>
+
+                                <div role="separator" class="my-1 border-t border-stone-200"></div>
+
+                                @foreach ($opsiTunggakan as $nilai => $teks)
+                                    <button type="button" role="menuitemradio" data-wajib-opsi="{{ $nilai }}" aria-checked="{{ $wajib['pilihan'] === $nilai ? 'true' : 'false' }}"
+                                            x-on:click="buka = false; $refs.nilai.value = @js($nilai); $el.closest('form').requestSubmit()" class="{{ $kelasOpsi }}">
+                                        {{ $teks }}
+                                        <span class="hidden h-1.5 w-1.5 rounded-full bg-arang group-aria-checked:block" aria-hidden="true"></span>
+                                    </button>
+                                @endforeach
+                            </div>
+                        </form>
+                        <x-ui.badge tone="brand" class="shrink-0 tabular-nums" data-jumlah-belum-setor>{{ $wajib['jumlah'] }} anggota</x-ui.badge>
                     </div>
                 </div>
             </x-slot:header>
 
-            @foreach ($daftarWajib as $kunci => $isi)
-                <div data-daftar-wajib="{{ $kunci }}" x-show="bulan === '{{ $kunci }}'" @if ($kunci !== 'ini') x-cloak @endif>
-                    @if ($isi['daftar']->isEmpty())
-                        <div class="flex flex-col items-center px-6 py-10 text-center">
-                            <x-ui.icon name="check-circle" class="w-10 h-10 text-setor" />
-                            <p class="mt-3 text-sm text-stone-600">{{ $isi['kosong'] }}</p>
-                        </div>
-                    @else
-                        {{-- F.4: saat dibuka penuh, tinggi daftar dikunci ke tinggi sebelumnya dan isinya digulir. --}}
-                        <div x-ref="daftar_{{ $kunci }}" x-bind:class="semua && 'overflow-y-auto'" x-bind:style="semua && tinggi ? { maxHeight: tinggi + 'px' } : {}">
-                            <ul class="divide-y divide-stone-200" data-belum-setor-wajib>
-                                @foreach ($isi['daftar'] as $i => $anggota)
-                                    <li class="flex items-center gap-3 px-6 py-3" @if ($i >= $batasBarisWajib) x-show="semua" x-cloak data-baris-lebih @endif>
-                                        <x-ui.avatar-initial :nama="$anggota->nama" />
-                                        <span class="min-w-0 flex-1">
-                                            <span class="block truncate text-sm font-medium text-stone-900">{{ $anggota->nama }}</span>
-                                            <span class="block font-mono text-xs text-stone-500">{{ $anggota->no_anggota }}</span>
-                                        </span>
-                                        <x-ui.button variant="secondary" size="sm" :href="route('transaksi.setor.create', ['anggota_id' => $anggota->id])">Catat</x-ui.button>
-                                    </li>
-                                @endforeach
-                            </ul>
-                            @if ($isi['jumlah'] > $isi['daftar']->count())
-                                <p data-sisa-wajib x-show="semua" x-cloak class="px-6 py-2 text-xs text-stone-400">dan {{ $isi['jumlah'] - $isi['daftar']->count() }} lainnya</p>
-                            @endif
-                        </div>
-
-                        @if ($isi['jumlah'] > min($batasBarisWajib, $isi['daftar']->count()))
-                            <div class="border-t border-stone-200 px-6 py-3">
-                                <button type="button" data-lihat-semua-wajib aria-expanded="false" x-bind:aria-expanded="semua.toString()"
-                                        x-on:click="if (! semua) { tinggi = $refs.daftar_{{ $kunci }}.offsetHeight } semua = ! semua"
-                                        class="inline-flex items-center gap-1.5 text-sm font-medium text-stone-600 hover:text-stone-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-arang/30">
-                                    <span x-text="semua ? 'Tampilkan lebih sedikit' : @js('Lihat semua '.$isi['jumlah'].' anggota')">Lihat semua {{ $isi['jumlah'] }} anggota</span>
-                                    <x-ui.icon name="arrow-right" class="h-4 w-4" x-show="! semua" />
-                                </button>
-                            </div>
+            <div data-daftar-wajib="{{ $kunciDaftar }}" data-mode-wajib="{{ $wajib['mode'] }}">
+                @if ($wajib['daftar']->isEmpty())
+                    <div class="flex flex-col items-center px-6 py-10 text-center">
+                        <x-ui.icon name="check-circle" class="w-10 h-10 text-setor" />
+                        <p class="mt-3 text-sm text-stone-600">{{ $wajib['kosong'] }}</p>
+                    </div>
+                @else
+                    {{-- F.4: saat dibuka penuh, tinggi daftar dikunci ke tinggi sebelumnya dan isinya digulir. --}}
+                    <div x-ref="daftar" x-bind:class="semua && 'overflow-y-auto'" x-bind:style="semua && tinggi ? { maxHeight: tinggi + 'px' } : {}">
+                        <ul class="divide-y divide-stone-200" data-belum-setor-wajib>
+                            @foreach ($wajib['daftar'] as $i => $anggota)
+                                <li class="flex items-center gap-3 px-6 py-3" @if ($i >= $batasBarisWajib) x-show="semua" x-cloak data-baris-lebih @endif>
+                                    <x-ui.avatar-initial :nama="$anggota->nama" />
+                                    <span class="min-w-0 flex-1">
+                                        <span class="block truncate text-sm font-medium text-stone-900">{{ $anggota->nama }}</span>
+                                        <span class="block font-mono text-xs text-stone-500">{{ $anggota->no_anggota }}</span>
+                                        @if ($wajib['mode'] === 'tunggakan')
+                                            <span data-bolong class="block text-xs text-emas-700">bolong {{ $anggota->bolong }} bulan</span>
+                                        @endif
+                                    </span>
+                                    <x-ui.button variant="secondary" size="sm" :href="route('transaksi.setor.create', ['anggota_id' => $anggota->id])">Catat</x-ui.button>
+                                </li>
+                            @endforeach
+                        </ul>
+                        @if ($wajib['jumlah'] > $wajib['daftar']->count())
+                            <p data-sisa-wajib x-show="semua" x-cloak class="px-6 py-2 text-xs text-stone-400">dan {{ $wajib['jumlah'] - $wajib['daftar']->count() }} lainnya</p>
                         @endif
+                    </div>
+
+                    @if ($wajib['jumlah'] > min($batasBarisWajib, $wajib['daftar']->count()))
+                        <div class="border-t border-stone-200 px-6 py-3">
+                            <button type="button" data-lihat-semua-wajib aria-expanded="false" x-bind:aria-expanded="semua.toString()"
+                                    x-on:click="if (! semua) { tinggi = $refs.daftar.offsetHeight } semua = ! semua"
+                                    class="inline-flex items-center gap-1.5 text-sm font-medium text-stone-600 hover:text-stone-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-arang/30">
+                                <span x-text="semua ? 'Tampilkan lebih sedikit' : @js('Lihat semua '.$wajib['jumlah'].' anggota')">Lihat semua {{ $wajib['jumlah'] }} anggota</span>
+                                <x-ui.icon name="arrow-right" class="h-4 w-4" x-show="! semua" />
+                            </button>
+                        </div>
                     @endif
-                </div>
-            @endforeach
+                @endif
+            </div>
         </x-ui.card>
     </div>
 </x-app-layout>

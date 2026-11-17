@@ -103,63 +103,6 @@ function rupiahRingkas(nilai) {
     return nilai < 0 ? `-Rp ${ringkas(-nilai)}` : `Rp ${ringkas(nilai)}`;
 }
 
-// Persen 1 desimal bertanda ASCII, sama dengan $persen di dashboard.blade.php.
-const angkaPersen = new Intl.NumberFormat('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-
-function persen(nilai) {
-    const bulat = Math.round(nilai * 10) / 10;
-    return `${bulat > 0 ? '+' : bulat < 0 ? '-' : ''}${angkaPersen.format(Math.abs(bulat))}%`;
-}
-
-function teksBanding(sekarang, sebelum) {
-    return sebelum === 0 ? '— vs sebelumnya' : `${persen(((sekarang - sebelum) / sebelum) * 100)} vs sebelumnya`;
-}
-
-// ---------------------------------------------------------------
-// Sparkline kotak arus (F2d C.3): SVG kecil, bukan instans Chart.js.
-// ---------------------------------------------------------------
-const SVG = 'http://www.w3.org/2000/svg';
-
-function gambarSparkline(wadah, nilai, warna) {
-    if (!wadah) return;
-
-    const lebar = 72;
-    const tinggi = 28;
-    const tepi = 2;
-    const angka = nilai.map(Number);
-    const min = Math.min(...angka);
-    const max = Math.max(...angka);
-    const rentang = max - min || 1;
-    const titik = angka.map((n, i) => {
-        const x = angka.length > 1 ? (i / (angka.length - 1)) * lebar : lebar / 2;
-        const y = max === min ? tinggi / 2 : tepi + (1 - (n - min) / rentang) * (tinggi - 2 * tepi);
-        return [x.toFixed(1), y.toFixed(1)];
-    });
-    const jalur = titik.map(([x, y], i) => `${i ? 'L' : 'M'}${x} ${y}`).join(' ');
-
-    const svg = document.createElementNS(SVG, 'svg');
-    svg.setAttribute('viewBox', `0 0 ${lebar} ${tinggi}`);
-    svg.setAttribute('width', lebar);
-    svg.setAttribute('height', tinggi);
-    svg.setAttribute('fill', 'none');
-
-    const isi = document.createElementNS(SVG, 'path');
-    isi.setAttribute('d', `${jalur} L${lebar} ${tinggi} L0 ${tinggi} Z`);
-    isi.setAttribute('fill', warna);
-    isi.setAttribute('fill-opacity', '0.08');
-
-    const garis = document.createElementNS(SVG, 'path');
-    garis.setAttribute('d', jalur);
-    garis.setAttribute('stroke', warna);
-    garis.setAttribute('stroke-width', '1.5');
-    garis.setAttribute('stroke-linejoin', 'round');
-    garis.setAttribute('stroke-linecap', 'round');
-    garis.setAttribute('vector-effect', 'non-scaling-stroke');
-
-    svg.append(isi, garis);
-    wadah.replaceChildren(svg);
-}
-
 // ---------------------------------------------------------------
 // Penyimpanan pilihan (localStorage dibungkus try/catch).
 // ---------------------------------------------------------------
@@ -554,7 +497,7 @@ function pasangGrafikArus(kanvas) {
         });
     }
 
-    // F2d C.3–C.6: tiga kotak, sparkline, dan baris persamaan mengikuti periode aktif.
+    // F2d I.1–I.2: tiga kotak (label, nominal, jumlah transaksi) dan baris persamaan mengikuti periode aktif.
     function perbaruiKotak(periode) {
         const { ringkasan } = periode;
         const isi = (wadah, pemilih, teks) => {
@@ -562,43 +505,38 @@ function pasangGrafikArus(kanvas) {
             if (el) el.textContent = teks;
             return el;
         };
+        // Nominal dipecah "Rp" | angka (I.1.3): hanya boleh turun baris setelah "Rp".
+        const isiNominal = (wadah, teks) => {
+            const pisah = teks.indexOf(' ');
+            isi(wadah, '[data-nilai-rp]', teks.slice(0, pisah));
+            isi(wadah, '[data-nilai-angka]', teks.slice(pisah + 1));
+            return wadah?.querySelector('[data-arus-nilai]');
+        };
 
         elemen.periodeTeks.forEach((el) => {
             el.textContent = TEKS_PERIODE[keadaan.periode];
         });
 
-        [
-            ['setor', ringkasan.total_setor, ringkasan.jumlah_setor, ringkasan.sebelumnya.total_setor, WARNA.setor],
-            ['tarik', ringkasan.total_tarik, ringkasan.jumlah_tarik, ringkasan.sebelumnya.total_tarik, WARNA.tarik],
-        ].forEach(([kunci, total, jumlah, sebelum, warna]) => {
-            const wadah = elemen.kotak[kunci];
-            isi(wadah, '[data-arus-nilai]', rupiah(Number(total)));
-            isi(wadah, '[data-arus-jumlah]', `${jumlah} transaksi`);
-            isi(wadah, '[data-arus-banding]', teksBanding(Number(total), Number(sebelum)));
-            gambarSparkline(wadah?.querySelector('[data-arus-spark]'), periode[kunci], warna);
-        });
+        const jumlahSetor = Number(ringkasan.jumlah_setor);
+        const jumlahTarik = Number(ringkasan.jumlah_tarik);
+        isiNominal(elemen.kotak.setor, rupiah(Number(ringkasan.total_setor)));
+        isi(elemen.kotak.setor, '[data-arus-jumlah]', `${jumlahSetor} transaksi`);
+        isiNominal(elemen.kotak.tarik, rupiah(Number(ringkasan.total_tarik)));
+        isi(elemen.kotak.tarik, '[data-arus-jumlah]', `${jumlahTarik} transaksi`);
 
-        const selisih = elemen.kotak.selisih;
         const bersih = Number(ringkasan.bersih);
-        const nilai = isi(selisih, '[data-arus-nilai]', rupiahBertanda(bersih));
+        const nilai = isiNominal(elemen.kotak.selisih, rupiahBertanda(bersih));
         if (nilai) {
             nilai.classList.remove(...KELAS_SELISIH);
             nilai.classList.add(bersih > 0 ? 'text-naik' : bersih < 0 ? 'text-turun' : 'text-stone-900');
         }
-        const saldoAwal = Number(ringkasan.saldo_awal);
-        const teksPersen = saldoAwal > 0 ? `${persen((bersih / saldoAwal) * 100)} dari saldo awal` : '';
-        const elPersen = isi(selisih, '[data-arus-persen]', teksPersen);
-        if (elPersen) elPersen.hidden = teksPersen === '';
-        gambarSparkline(selisih?.querySelector('[data-arus-spark]'), periode.saldo, WARNA.saldo);
+        isi(elemen.kotak.selisih, '[data-arus-jumlah]', `${jumlahSetor + jumlahTarik} transaksi`);
 
         if (elemen.persamaan) {
-            isi(elemen.persamaan, '[data-persamaan="saldo_awal"]', rupiah(saldoAwal));
+            isi(elemen.persamaan, '[data-persamaan="saldo_awal"]', rupiah(Number(ringkasan.saldo_awal)));
             isi(elemen.persamaan, '[data-persamaan="total_setor"]', rupiah(Number(ringkasan.total_setor)));
             isi(elemen.persamaan, '[data-persamaan="total_tarik"]', rupiah(Number(ringkasan.total_tarik)));
             isi(elemen.persamaan, '[data-persamaan="saldo_akhir"]', rupiah(Number(ringkasan.saldo_akhir)));
-            const sesuai = Math.abs(Number(ringkasan.saldo_akhir) - Number(elemen.persamaan.dataset.totalSaldo)) < 0.005;
-            elemen.persamaan.querySelector('[data-arus-cek="sesuai"]').hidden = !sesuai;
-            elemen.persamaan.querySelector('[data-arus-cek="tidak"]').hidden = sesuai;
         }
     }
 
