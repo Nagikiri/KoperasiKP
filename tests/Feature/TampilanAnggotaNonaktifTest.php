@@ -25,7 +25,8 @@ class TampilanAnggotaNonaktifTest extends TestCase
     // F1 §3.12: jangkar atribut data-status-anggota (pola regex), bukan markup/gaya utuh.
     private const PENANDA = '<span[^>]*data-status-anggota="nonaktif"[^>]*>\(Nonaktif\)<\/span>';
 
-    private const STATUS_MERAH = '<span[^>]*data-status-anggota="nonaktif"[^>]*>Nonaktif<\/span>';
+    // F3b B.4 / H.2.6: badge status kini pil bergaris tepi dengan titik red-600 di depan teks.
+    private const STATUS_MERAH = '<span[^>]*data-status-anggota="nonaktif"[^>]*><span[^>]*bg-red-600[^>]*><\/span>Nonaktif<\/span>';
 
     private User $admin;
 

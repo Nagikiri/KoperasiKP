@@ -35,13 +35,18 @@ class TransaksiSimpanan extends Model
         'saldo_akhir' => 'decimal:2',
     ];
 
-    /** Nilai `rentang` yang dikenali scopeFilter (F2c D.1). */
+    /** Nilai `rentang` yang diterima Dashboard dan Riwayat (F2c D.1). Sengaja tidak diubah di F3b (H.2.1). */
     public const RENTANG = ['hari_ini', '7_hari', '30_hari', 'bulan_ini'];
 
+    /** Nilai `rentang` yang diterima riwayat di detail anggota (F3b E.1, H.2.1). */
+    public const RENTANG_RIWAYAT_ANGGOTA = ['bulan_ini', 'bulan_lalu', '3_bulan', 'tahun_ini', 'kustom'];
+
     /**
-     * Filter transaksi (F2c D.1; dipakai dashboard, nanti juga Riwayat di F4).
-     * Kunci: cari, jenis_transaksi, jenis_simpanan_id, rentang. Nilai kosong atau
-     * tidak valid diabaikan diam-diam. Rentang dihitung dari now() dan termasuk hari ini.
+     * Filter transaksi (F2c D.1; dipakai dashboard, Riwayat, dan detail anggota sejak F3b).
+     * Kunci: cari, jenis_transaksi, jenis_simpanan_id, rentang, dan dari/sampai (hanya untuk rentang=kustom).
+     * Scope mengenali gabungan RENTANG dan RENTANG_RIWAYAT_ANGGOTA; tiap controller membatasi sendiri
+     * rentang yang diterimanya. Nilai kosong atau tidak valid diabaikan diam-diam. Rentang yang berjalan
+     * dihitung dari now() dan termasuk hari ini.
      *
      * @param  array<string, mixed>  $filter
      */
@@ -54,12 +59,18 @@ class TransaksiSimpanan extends Model
         $jenisSimpananId = $teks('jenis_simpanan_id');
         $rentang = $teks('rentang');
 
-        $mulai = match ($rentang) {
-            'hari_ini' => now()->startOfDay(),
-            '7_hari' => now()->startOfDay()->subDays(6),
-            '30_hari' => now()->startOfDay()->subDays(29),
-            'bulan_ini' => now()->startOfMonth(),
-            default => null,
+        $kustom = $rentang === 'kustom' ? self::rentangKustom($filter['dari'] ?? null, $filter['sampai'] ?? null) : null;
+
+        [$mulai, $sampai] = match ($rentang) {
+            'hari_ini' => [now()->toDateString(), now()->toDateString()],
+            '7_hari' => [now()->startOfDay()->subDays(6)->toDateString(), now()->toDateString()],
+            '30_hari' => [now()->startOfDay()->subDays(29)->toDateString(), now()->toDateString()],
+            'bulan_ini' => [now()->startOfMonth()->toDateString(), now()->toDateString()],
+            'bulan_lalu' => [now()->startOfMonth()->subMonthNoOverflow()->toDateString(), now()->startOfMonth()->subDay()->toDateString()],
+            '3_bulan' => [now()->startOfDay()->subMonthsNoOverflow(3)->toDateString(), now()->toDateString()],
+            'tahun_ini' => [now()->startOfYear()->toDateString(), now()->toDateString()],
+            'kustom' => $kustom !== null ? [$kustom['dari'], $kustom['sampai']] : [null, null],
+            default => [null, null],
         };
 
         return $query
@@ -69,8 +80,38 @@ class TransaksiSimpanan extends Model
             ->when(in_array($jenisTransaksi, [self::SETOR, self::TARIK], true), fn (Builder $q) => $q->where('jenis_transaksi', $jenisTransaksi))
             ->when(ctype_digit($jenisSimpananId), fn (Builder $q) => $q->where('jenis_simpanan_id', (int) $jenisSimpananId))
             ->when($mulai !== null, fn (Builder $q) => $q
-                ->whereDate('tanggal_transaksi', '>=', $mulai->toDateString())
-                ->whereDate('tanggal_transaksi', '<=', now()->toDateString()));
+                ->whereDate('tanggal_transaksi', '>=', $mulai)
+                ->whereDate('tanggal_transaksi', '<=', $sampai));
+    }
+
+    /**
+     * Rentang kustom (F3b E.2): `dari` dan `sampai` harus tanggal valid berformat Y-m-d. Jika salah satu
+     * tidak valid → null (filter tanggal diabaikan). Jika dari > sampai, keduanya ditukar.
+     *
+     * @return array{dari: string, sampai: string}|null
+     */
+    public static function rentangKustom(mixed $dari, mixed $sampai): ?array
+    {
+        $tanggal = function (mixed $nilai): ?string {
+            if (! is_string($nilai) || preg_match('/^\d{4}-\d{2}-\d{2}$/', $nilai) !== 1) {
+                return null;
+            }
+
+            [$tahun, $bulan, $hari] = array_map('intval', explode('-', $nilai));
+
+            return checkdate($bulan, $hari, $tahun) ? $nilai : null;
+        };
+
+        $dari = $tanggal($dari);
+        $sampai = $tanggal($sampai);
+
+        if ($dari === null || $sampai === null) {
+            return null;
+        }
+
+        return $dari <= $sampai
+            ? ['dari' => $dari, 'sampai' => $sampai]
+            : ['dari' => $sampai, 'sampai' => $dari];
     }
 
     public function anggota()

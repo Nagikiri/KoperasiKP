@@ -3,30 +3,48 @@
 @tailwind utilities;
 
 @layer components {
-    /* Tabel seragam (F1 §3.7): pakai <table class="tabel">, sel angka diberi kelas .num. Garis stone-200 (F2c A.2). */
+    /*
+     * Tabel seragam (F1 §3.7, F3b A): pakai <table class="tabel">, sel angka diberi kelas .num (tabular-nums, rata kiri).
+     * Baris rapat, garis antar kolom dan antar baris stone-200, sel tepi pl-6/pr-6 sejajar kepala kartu.
+     */
     .tabel {
         @apply w-full text-left text-sm text-stone-700;
     }
 
     .tabel thead th {
-        @apply bg-stone-50 px-6 py-3 text-xs font-medium uppercase tracking-wide text-stone-500;
+        @apply border-b border-r border-stone-200 bg-stone-50 px-4 py-2.5 text-xs font-medium text-stone-500;
     }
 
     .tabel tbody td {
-        @apply border-t border-stone-200 px-6 py-4;
+        @apply border-r border-t border-stone-200 px-4 py-2.5;
+    }
+
+    .tabel tbody tr:first-child td {
+        @apply border-t-0;
+    }
+
+    .tabel th:first-child,
+    .tabel td:first-child {
+        @apply pl-6;
+    }
+
+    .tabel th:last-child,
+    .tabel td:last-child {
+        @apply border-r-0 pr-6;
     }
 
     .tabel tbody tr:hover {
-        @apply bg-stone-50/60;
+        @apply bg-stone-50;
     }
 
+    /* Revisi pasca-F3b: semua judul dan sel .tabel rata kiri, termasuk angka; .num hanya memberi tabular-nums. */
     .tabel .num {
-        @apply text-right tabular-nums;
+        @apply tabular-nums;
     }
 }
 
 /*
- * Timpa warna autofill browser (latar biru muda) agar input tetap stone-50 / teks stone-900.
+ * Timpa warna autofill browser (latar biru muda) agar input tetap putih / teks stone-900 (F3b H.2.7).
  * Latar autofill tidak bisa diganti langsung, jadi ditutup box-shadow inset dan transisinya diperlambat.
  */
 input:-webkit-autofill,
@@ -34,15 +52,15 @@ input:-webkit-autofill:hover,
 input:-webkit-autofill:focus {
     -webkit-text-fill-color: theme('colors.stone.900');
     caret-color: theme('colors.stone.900');
-    -webkit-box-shadow: 0 0 0 1000px theme('colors.stone.50') inset;
-    box-shadow: 0 0 0 1000px theme('colors.stone.50') inset;
+    -webkit-box-shadow: 0 0 0 1000px #fff inset;
+    box-shadow: 0 0 0 1000px #fff inset;
     transition: background-color 5000s ease-in-out 0s;
 }
 
-/* Saat fokus, ring merah (ring-2 ring-merah/15 di x-ui.input) tetap terlihat di atas penutup autofill. */
+/* Saat fokus, ring arang (ring-2 ring-arang/20 di x-ui.input) tetap terlihat di atas penutup autofill. */
 input:-webkit-autofill:focus {
-    -webkit-box-shadow: 0 0 0 1000px theme('colors.stone.50') inset, 0 0 0 2px rgb(200 16 46 / 0.15);
-    box-shadow: 0 0 0 1000px theme('colors.stone.50') inset, 0 0 0 2px rgb(200 16 46 / 0.15);
+    -webkit-box-shadow: 0 0 0 1000px #fff inset, 0 0 0 2px rgb(31 35 40 / 0.2);
+    box-shadow: 0 0 0 1000px #fff inset, 0 0 0 2px rgb(31 35 40 / 0.2);
 }
 
 [x-cloak] {

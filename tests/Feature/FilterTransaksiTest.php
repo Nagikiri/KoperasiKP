@@ -116,6 +116,45 @@ class FilterTransaksiTest extends TestCase
     }
 
     // ---------------------------------------------------------------
+    // F3b E — rentang baru di scope (dipakai detail anggota)
+    // ---------------------------------------------------------------
+
+    public function test_scope_rentang_baru_bulan_lalu_tiga_bulan_tahun_ini_dan_kustom(): void
+    {
+        $semua = array_keys($this->trx);
+
+        $this->assertHasil(['rentang' => 'bulan_lalu'], ['budi_pokok_okt', 'budi_sukarela_okt']);
+        $this->assertHasil(['rentang' => '3_bulan'], $semua);
+        $this->assertHasil(['rentang' => 'tahun_ini'], $semua);
+        $this->assertHasil(['rentang' => 'kustom', 'dari' => '2026-10-14', 'sampai' => '2026-11-05'], ['budi_pokok_okt', 'siti_wajib_nov1', 'siti_tarik_nov5']);
+        // dari > sampai ditukar.
+        $this->assertHasil(['rentang' => 'kustom', 'dari' => '2026-11-05', 'sampai' => '2026-10-14'], ['budi_pokok_okt', 'siti_wajib_nov1', 'siti_tarik_nov5']);
+        // Kustom tanpa dua tanggal valid: filter tanggal diabaikan.
+        $this->assertHasil(['rentang' => 'kustom', 'dari' => '2026-10-14'], $semua);
+        $this->assertHasil(['rentang' => 'kustom', 'dari' => '2026-13-01', 'sampai' => '2026-11-05'], $semua);
+        $this->assertHasil(['rentang' => 'kustom', 'dari' => ['2026-10-14'], 'sampai' => '2026-11-05'], $semua);
+        // dari/sampai tidak berpengaruh tanpa rentang=kustom.
+        $this->assertHasil(['dari' => '2026-11-01', 'sampai' => '2026-11-01'], $semua);
+    }
+
+    public function test_dashboard_dan_riwayat_menolak_rentang_milik_detail_anggota(): void
+    {
+        foreach (['bulan_lalu', '3_bulan', 'tahun_ini', 'kustom'] as $rentang) {
+            $query = ['rentang' => $rentang, 'dari' => '2026-11-12', 'sampai' => '2026-11-12'];
+
+            $dashboard = $this->actingAs($this->admin)->get(route('dashboard', $query))->assertOk();
+            $this->assertNull($dashboard->viewData('filterTransaksi')['rentang'], "Dashboard rentang={$rentang}");
+            $this->assertCount(6, $dashboard->viewData('transaksiTerbaru'), 'Data dashboard tidak terfilter.');
+            $label = $this->xpath($dashboard->getContent())->query('//*[@data-dropdown-filter="rentang"]//*[@data-dropdown-label]')->item(0);
+            $this->assertSame('Semua waktu', trim($label->textContent));
+
+            $riwayat = $this->actingAs($this->admin)->get(route('transaksi.riwayat', $query))->assertOk();
+            $this->assertNull($riwayat->viewData('filter')['rentang'], "Riwayat rentang={$rentang}");
+            $riwayat->assertDontSee('data-filter-dashboard', false);
+        }
+    }
+
+    // ---------------------------------------------------------------
     // Dashboard
     // ---------------------------------------------------------------
 

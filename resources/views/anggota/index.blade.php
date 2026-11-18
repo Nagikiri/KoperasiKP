@@ -35,44 +35,70 @@
                 </x-ui.empty>
             @endif
         @else
+            {{-- F3b B.1: lebar kolom dikunci (colgroup + table-fixed); di layar sempit tabel bergulir mendatar. --}}
             <div class="overflow-x-auto">
-                <table class="tabel">
+                <table class="tabel min-w-[56rem] table-fixed">
+                    {{-- Kolom Anggota tanpa lebar: mengisi sisa ruang setelah kolom Aksi yang lebarnya tetap (2 tombol + gap). --}}
+                    <colgroup>
+                        <col>
+                        <col class="w-[16%]">
+                        <col class="w-[13%]">
+                        <col class="w-[12%]">
+                        <col class="w-[14%]">
+                        <col class="w-[10%]">
+                        <col class="w-28">
+                    </colgroup>
                     <thead>
                         <tr>
                             <th>Anggota</th>
                             <th>NIK</th>
                             <th>No. telepon</th>
                             <th>Bergabung</th>
+                            <th class="num">Total simpanan</th>
                             <th>Status</th>
-                            <th class="text-right">Aksi</th>
+                            <th>Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach ($anggota as $item)
-                            <tr data-baris-anggota="{{ $item->id }}">
+                            @php $aktif = $item->isAktif(); @endphp
+                            {{-- B.5 / H.3.3: baris nonaktif redup (nama stone-500, teks lain stone-400); badge tidak diredupkan. --}}
+                            <tr data-baris-anggota="{{ $item->id }}" @class(['text-stone-400' => ! $aktif]) @if (! $aktif) data-baris-nonaktif @endif>
                                 <td>
-                                    <div class="flex items-center gap-3">
-                                        <x-ui.avatar-initial :nama="$item->nama" />
+                                    <div class="flex min-w-0 items-center gap-3">
+                                        <x-ui.avatar-initial :nama="$item->nama" size="sm" />
                                         <div class="min-w-0">
-                                            <div class="font-medium text-stone-900">{{ $item->nama }}</div>
-                                            <div class="font-mono text-xs text-stone-500">{{ $item->no_anggota }}</div>
+                                            <a href="{{ route('anggota.show', $item) }}" data-tautan-detail
+                                               @class([
+                                                   'block truncate font-medium underline underline-offset-4 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-arang/30 rounded-sm',
+                                                   'text-stone-900 decoration-stone-300 hover:decoration-stone-900' => $aktif,
+                                                   'text-stone-500 decoration-stone-300 hover:decoration-stone-500' => ! $aktif,
+                                               ])>{{ $item->nama }}</a>
+                                            <div @class(['truncate font-mono text-xs', 'text-stone-500' => $aktif])>{{ $item->no_anggota }}</div>
                                         </div>
                                     </div>
                                 </td>
-                                <td class="font-mono text-xs tabular-nums">{{ $item->nik }}</td>
-                                <td class="tabular-nums">{{ $item->no_telepon ?? '–' }}</td>
+                                <td class="whitespace-nowrap font-mono tabular-nums" data-nik-samar>{{ Format::nikSamar($item->nik) }}</td>
+                                <td class="whitespace-nowrap tabular-nums">{{ $item->no_telepon }}</td>
                                 <td class="whitespace-nowrap">{{ Format::tanggal($item->tanggal_bergabung) }}</td>
+                                <td class="num whitespace-nowrap" data-total-simpanan>{{ Format::rupiah($item->total_simpanan) }}</td>
                                 <td><x-status-anggota :status="$item->status" /></td>
                                 <td>
-                                    <div class="flex items-center justify-end gap-1">
-                                        <x-ui.button variant="ghost" size="sm" square :href="route('anggota.show', $item)" icon="eye"
-                                                     aria-label="Lihat {{ $item->nama }}" title="Lihat" />
-                                        <x-ui.button variant="ghost" size="sm" square :href="route('anggota.edit', $item)" icon="pencil-square"
-                                                     aria-label="Ubah {{ $item->nama }}" title="Ubah" />
-                                        @if ($item->isAktif())
-                                            <x-ui.button variant="ghost" size="sm" square type="button" icon="no-symbol"
+                                    {{-- Revisi pasca-F3b: dua slot tombol ikon tetap (Ubah | Nonaktifkan); anggota nonaktif mendapat slot kosong agar pensil sejajar. --}}
+                                    <div class="flex items-center gap-2">
+                                        <x-ui.button variant="ghost" size="sm" square :href="route('anggota.edit', $item)" data-aksi-ubah
+                                                     aria-label="Ubah data {{ $item->nama }}" title="Ubah data {{ $item->nama }}">
+                                            <x-ui.icon name="pencil-square" class="h-4 w-4 text-stone-500" />
+                                        </x-ui.button>
+                                        @if ($aktif)
+                                            <x-ui.button variant="ghost" size="sm" square type="button" data-aksi-nonaktifkan
+                                                         class="group hover:!bg-red-50 hover:text-red-600"
                                                          x-on:click="$dispatch('open-modal', 'nonaktifkan-{{ $item->id }}')"
-                                                         aria-label="Nonaktifkan {{ $item->nama }}" title="Nonaktifkan" />
+                                                         aria-label="Nonaktifkan {{ $item->nama }}" title="Nonaktifkan {{ $item->nama }}">
+                                                <x-ui.icon name="no-symbol" class="h-4 w-4 text-stone-500 group-hover:text-red-600" />
+                                            </x-ui.button>
+                                        @else
+                                            <span aria-hidden="true" class="inline-block h-8 w-8 shrink-0" data-slot-aksi-kosong></span>
                                         @endif
                                     </div>
                                 </td>

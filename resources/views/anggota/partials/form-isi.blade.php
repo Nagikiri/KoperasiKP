@@ -1,5 +1,6 @@
 {{--
     Isi form tambah/ubah anggota (F3 §3): tiga kartu bertumpuk + bilah aksi.
+    F3b C.1 / H.2.2 / H.5.5: selebar wadah layout; di dalam tiap kartu grid 2 kolom di lg, satu kolom di layar kecil.
     $anggota: null (tambah) atau model (ubah). Nama field dan old() tetap seperti kontrak lama.
 --}}
 @php
@@ -11,7 +12,7 @@
     ];
 @endphp
 
-<div class="max-w-3xl space-y-6">
+<div class="space-y-6">
     @foreach ($kartu as $kunci => $info)
         <x-ui.card data-kartu-form="{{ $kunci }}">
             <x-slot:header>
@@ -23,9 +24,9 @@
                 </div>
             </x-slot:header>
 
-            <div class="grid gap-5 sm:grid-cols-2">
+            <div class="grid gap-5 lg:grid-cols-2">
                 @if ($kunci === 'pribadi')
-                    <div class="sm:col-span-2">
+                    <div>
                         <x-ui.label for="nama" value="Nama lengkap" />
                         <x-ui.input id="nama" type="text" name="nama" value="{{ old('nama', $anggota?->nama) }}" class="mt-1.5" autocomplete="off" />
                         <x-ui.field-error name="nama" />
@@ -42,7 +43,7 @@
                         <x-ui.input id="no_telepon" type="text" name="no_telepon" value="{{ old('no_telepon', $anggota?->no_telepon) }}" placeholder="081234567890" inputmode="tel" class="mt-1.5" />
                         <x-ui.field-error name="no_telepon" />
                     </div>
-                    <div class="sm:col-span-2">
+                    <div class="lg:col-span-2">
                         <x-ui.label for="alamat" value="Alamat" />
                         <x-ui.textarea id="alamat" name="alamat" rows="3" class="mt-1.5">{{ old('alamat', $anggota?->alamat) }}</x-ui.textarea>
                         <x-ui.field-error name="alamat" />
@@ -59,7 +60,7 @@
                             <p class="text-sm font-medium text-stone-700">Nomor anggota</p>
                             <p class="mt-1.5 flex h-11 items-center font-mono text-sm text-stone-900" data-nomor-anggota>{{ $anggota->no_anggota }}</p>
                         @else
-                            <div class="flex items-start gap-2 rounded-xl bg-stone-50 px-3.5 py-3 text-sm text-stone-600 sm:mt-6">
+                            <div class="flex items-start gap-2 rounded-xl bg-stone-50 px-3.5 py-3 text-sm text-stone-600 lg:mt-6">
                                 <x-ui.icon name="information-circle" class="mt-0.5 h-4 w-4 shrink-0 text-stone-400" />
                                 <p>Nomor anggota dibuat otomatis oleh sistem.</p>
                             </div>
