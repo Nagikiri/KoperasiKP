@@ -109,34 +109,74 @@ class TransaksiSimpananController extends Controller
 
     public function riwayat(Request $request): View
     {
-        // F2d H.2.1: tiga kunci filter dashboard ikut diterima (sejalan F4). Nilai tidak valid
-        // untuk cari/jenis_transaksi/rentang menjadi null, sama seperti di dashboard.
-        $jenisTransaksi = $this->stringAtauNull($request->query('jenis_transaksi'));
-        $rentang = $this->stringAtauNull($request->query('rentang'));
+        $anggotaList = Anggota::query()->orderBy('nama')->get(['id', 'no_anggota', 'nama', 'status']);
+        $jenisSimpanan = JenisSimpanan::query()->orderBy('id')->get();
 
-        $filter = [
-            'anggota_id' => $this->stringAtauNull($request->query('anggota_id')),
-            'jenis_simpanan_id' => $this->stringAtauNull($request->query('jenis_simpanan_id')),
-            'cari' => $this->stringAtauNull($request->query('cari')),
-            'jenis_transaksi' => in_array($jenisTransaksi, [TransaksiSimpanan::SETOR, TransaksiSimpanan::TARIK], true) ? $jenisTransaksi : null,
-            'rentang' => in_array($rentang, TransaksiSimpanan::RENTANG, true) ? $rentang : null,
-        ];
+        $filter = $this->filterRiwayat($request, $anggotaList, $jenisSimpanan);
 
-        $riwayat = TransaksiSimpanan::query()
+        // Satu kueri dasar untuk daftar dan ringkasan (H.3.6), dengan filter yang sama.
+        $kueri = fn () => TransaksiSimpanan::query()
+            ->when($filter['anggota_id'], fn ($query, $id) => $query->where('anggota_id', (int) $id))
+            ->filter(array_intersect_key($filter, array_flip(['cari', 'jenis_transaksi', 'jenis_simpanan_id', 'rentang', 'dari', 'sampai'])));
+
+        $riwayat = $kueri()
             ->with(['anggota', 'jenisSimpanan', 'staff'])
-            ->when($filter['anggota_id'], fn ($query, $id) => $query->where('anggota_id', $id))
-            ->filter(array_intersect_key($filter, array_flip(['cari', 'jenis_transaksi', 'jenis_simpanan_id', 'rentang'])))
             ->orderByDesc('tanggal_transaksi')
             ->orderByDesc('id')
             ->paginate(20)
             ->withQueryString();
 
+        $agregat = $kueri()
+            ->selectRaw("COALESCE(SUM(CASE WHEN jenis_transaksi = 'setor' THEN jumlah ELSE 0 END), 0) AS total_setor")
+            ->selectRaw("COALESCE(SUM(CASE WHEN jenis_transaksi = 'tarik' THEN jumlah ELSE 0 END), 0) AS total_tarik")
+            ->toBase()
+            ->first();
+
         return view('transaksi.riwayat', [
             'riwayat' => $riwayat,
-            'anggotaList' => Anggota::query()->orderBy('nama')->get(['id', 'no_anggota', 'nama', 'status']),
-            'jenisSimpanan' => JenisSimpanan::query()->orderBy('id')->get(),
+            'anggotaList' => $anggotaList,
+            'jenisSimpanan' => $jenisSimpanan,
             'filter' => $filter,
+            'ringkasan' => [
+                'total_setor' => round((float) $agregat->total_setor, 2),
+                'total_tarik' => round((float) $agregat->total_tarik, 2),
+            ],
         ]);
+    }
+
+    /**
+     * Filter Riwayat (F2d H.2.1, F4 H.3.1–H.3.3): tujuh kunci berurutan, nilai string|null; tidak valid → null.
+     * anggota_id/jenis_simpanan_id harus cocok dengan daftar yang sudah dimuat (tanpa query tambahan).
+     * rentang=kustom tanpa dari DAN sampai yang valid = tanpa filter; dari/sampai hanya terisi saat kustom.
+     *
+     * @param  Collection<int, Anggota>  $anggotaList
+     * @param  Collection<int, JenisSimpanan>  $jenisSimpanan
+     * @return array{anggota_id: ?string, jenis_simpanan_id: ?string, cari: ?string, jenis_transaksi: ?string, rentang: ?string, dari: ?string, sampai: ?string}
+     */
+    private function filterRiwayat(Request $request, Collection $anggotaList, Collection $jenisSimpanan): array
+    {
+        $anggotaId = $this->stringAtauNull($request->query('anggota_id'));
+        $jenisSimpananId = $this->stringAtauNull($request->query('jenis_simpanan_id'));
+        $jenisTransaksi = $this->stringAtauNull($request->query('jenis_transaksi'));
+        $rentang = $this->stringAtauNull($request->query('rentang'));
+
+        $kustom = $rentang === 'kustom'
+            ? TransaksiSimpanan::rentangKustom($this->stringAtauNull($request->query('dari')), $this->stringAtauNull($request->query('sampai')))
+            : null;
+
+        if (! in_array($rentang, TransaksiSimpanan::RENTANG_RIWAYAT, true) || ($rentang === 'kustom' && $kustom === null)) {
+            $rentang = null;
+        }
+
+        return [
+            'anggota_id' => $anggotaList->contains(fn (Anggota $anggota) => (string) $anggota->id === $anggotaId) ? $anggotaId : null,
+            'jenis_simpanan_id' => $jenisSimpanan->contains(fn (JenisSimpanan $jenis) => (string) $jenis->id === $jenisSimpananId) ? $jenisSimpananId : null,
+            'cari' => $this->stringAtauNull($request->query('cari')),
+            'jenis_transaksi' => in_array($jenisTransaksi, [TransaksiSimpanan::SETOR, TransaksiSimpanan::TARIK], true) ? $jenisTransaksi : null,
+            'rentang' => $rentang,
+            'dari' => $rentang === 'kustom' ? $kustom['dari'] : null,
+            'sampai' => $rentang === 'kustom' ? $kustom['sampai'] : null,
+        ];
     }
 
     /**

@@ -137,7 +137,7 @@ class FilterTransaksiTest extends TestCase
         $this->assertHasil(['dari' => '2026-11-01', 'sampai' => '2026-11-01'], $semua);
     }
 
-    public function test_dashboard_dan_riwayat_menolak_rentang_milik_detail_anggota(): void
+    public function test_dashboard_menolak_dan_riwayat_menerima_rentang_milik_detail_anggota(): void
     {
         foreach (['bulan_lalu', '3_bulan', 'tahun_ini', 'kustom'] as $rentang) {
             $query = ['rentang' => $rentang, 'dari' => '2026-11-12', 'sampai' => '2026-11-12'];
@@ -148,8 +148,10 @@ class FilterTransaksiTest extends TestCase
             $label = $this->xpath($dashboard->getContent())->query('//*[@data-dropdown-filter="rentang"]//*[@data-dropdown-label]')->item(0);
             $this->assertSame('Semua waktu', trim($label->textContent));
 
+            // F4 H.3.1: Riwayat memakai RENTANG_RIWAYAT (gabungan), jadi rentang ini diterima.
             $riwayat = $this->actingAs($this->admin)->get(route('transaksi.riwayat', $query))->assertOk();
-            $this->assertNull($riwayat->viewData('filter')['rentang'], "Riwayat rentang={$rentang}");
+            $this->assertSame($rentang, $riwayat->viewData('filter')['rentang'], "Riwayat rentang={$rentang}");
+            $this->assertSame($rentang === 'kustom' ? '2026-11-12' : null, $riwayat->viewData('filter')['dari']);
             $riwayat->assertDontSee('data-filter-dashboard', false);
         }
     }

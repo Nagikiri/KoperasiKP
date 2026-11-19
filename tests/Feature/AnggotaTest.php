@@ -948,7 +948,8 @@ class AnggotaTest extends TestCase
         $anggota = Anggota::factory()->create();
         $this->buatTransaksi($anggota, '2026-03-01');
 
-        foreach ([route('anggota.index'), route('anggota.show', $anggota)] as $url) {
+        // F4 H.5.1: Riwayat transaksi ikut aturan rata kiri.
+        foreach ([route('anggota.index'), route('anggota.show', $anggota), route('transaksi.riwayat')] as $url) {
             $xpath = $this->xpath($this->actingAs($this->admin)->get($url)->getContent());
             $this->assertGreaterThan(0, $xpath->query('//table[contains(@class, "tabel")]//th')->length, $url);
             $this->assertSame(0, $xpath->query('//table[contains(@class, "tabel")]//th[contains(@class, "text-right") or contains(@class, "text-center")]')->length, $url);

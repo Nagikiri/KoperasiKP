@@ -173,7 +173,10 @@ class TampilanDasarTest extends TestCase
             $html = $this->actingAs($this->admin)->get($url)->assertOk()->getContent();
 
             $this->assertMatchesRegularExpression('/<a href="'.preg_quote(route($routeMenu), '/').'"[^>]*aria-current="page"/', $html, "Menu {$routeMenu} harus aktif di {$url}.");
-            $this->assertSame(1, substr_count($html, 'aria-current="page"'), "Hanya satu item aktif di {$url}.");
+            // F4 H.4.1: hanya dihitung di navigasi (sidebar + menu akun topbar, tempat Pengaturan Akun);
+            // paginasi juga memakai aria-current="page" untuk halaman aktif.
+            $navigasi = $this->bagian($html, 'aside', 'data-sidebar').$this->bagian($html, 'header', 'data-topbar');
+            $this->assertSame(1, substr_count($navigasi, 'aria-current="page"'), "Hanya satu item menu aktif di {$url}.");
         }
     }
 

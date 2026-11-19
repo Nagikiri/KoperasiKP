@@ -214,7 +214,7 @@ class TransaksiSimpananTest extends TestCase
 
         $this->actingAs($this->admin)->get(route('transaksi.riwayat'))
             ->assertOk()
-            ->assertViewHas('filter', ['anggota_id' => null, 'jenis_simpanan_id' => null, 'cari' => null, 'jenis_transaksi' => null, 'rentang' => null]);
+            ->assertViewHas('filter', ['anggota_id' => null, 'jenis_simpanan_id' => null, 'cari' => null, 'jenis_transaksi' => null, 'rentang' => null, 'dari' => null, 'sampai' => null]);
     }
 
     public function test_setor_lewat_form_untuk_ketiga_jenis_sukses(): void
@@ -454,7 +454,7 @@ class TransaksiSimpananTest extends TestCase
 
         $this->actingAs($this->admin)->get(route('transaksi.riwayat', ['anggota_id' => $a->id]))
             ->assertViewHas('riwayat', fn ($r) => $ids($r) === [$t4->id, $t2->id, $t1->id])
-            ->assertViewHas('filter', ['anggota_id' => (string) $a->id, 'jenis_simpanan_id' => null, 'cari' => null, 'jenis_transaksi' => null, 'rentang' => null]);
+            ->assertViewHas('filter', ['anggota_id' => (string) $a->id, 'jenis_simpanan_id' => null, 'cari' => null, 'jenis_transaksi' => null, 'rentang' => null, 'dari' => null, 'sampai' => null]);
 
         $this->actingAs($this->admin)->get(route('transaksi.riwayat', ['jenis_simpanan_id' => $this->sukarela->id]))
             ->assertViewHas('riwayat', fn ($r) => $ids($r) === [$t4->id, $t2->id, $t3->id]);
@@ -778,10 +778,10 @@ class TransaksiSimpananTest extends TestCase
     }
 
     // ---------------------------------------------------------------
-    // F2d H.2.1 — riwayat menerima filter dashboard (cari, jenis_transaksi, rentang)
+    // F2d H.2.1, F4 H.3 — riwayat menerima filter dashboard lewat bilah filter penuh
     // ---------------------------------------------------------------
 
-    public function test_riwayat_menerapkan_filter_dashboard_dan_membawanya_di_form(): void
+    public function test_riwayat_menerapkan_filter_dashboard_dan_menampilkannya_di_bilah(): void
     {
         $budi = Anggota::factory()->create(['nama' => 'Budi Santoso', 'tanggal_bergabung' => '2026-01-01']);
         $siti = Anggota::factory()->create(['nama' => 'Siti Aminah', 'tanggal_bergabung' => '2026-01-01']);
@@ -795,7 +795,7 @@ class TransaksiSimpananTest extends TestCase
 
         $response = $this->actingAs($this->admin)->get(route('transaksi.riwayat', ['cari' => 'budi', 'jenis_transaksi' => 'setor', 'rentang' => '30_hari']));
         $response->assertOk()
-            ->assertViewHas('filter', ['anggota_id' => null, 'jenis_simpanan_id' => null, 'cari' => 'budi', 'jenis_transaksi' => 'setor', 'rentang' => '30_hari'])
+            ->assertViewHas('filter', ['anggota_id' => null, 'jenis_simpanan_id' => null, 'cari' => 'budi', 'jenis_transaksi' => 'setor', 'rentang' => '30_hari', 'dari' => null, 'sampai' => null])
             ->assertViewHas('riwayat', fn ($r) => $ids($r) === [$baru->id]);
 
         $this->actingAs($this->admin)->get(route('transaksi.riwayat', ['cari' => 'budi']))
@@ -803,30 +803,44 @@ class TransaksiSimpananTest extends TestCase
         $this->actingAs($this->admin)->get(route('transaksi.riwayat', ['jenis_transaksi' => 'tarik']))
             ->assertViewHas('riwayat', fn ($r) => $ids($r) === [$tarik->id]);
 
-        // Form membawa filter dashboard sebagai input tersembunyi; baris "Juga difilter" tampil.
+        // H.3.4: nilai filter tampil di bilah, bukan sebagai input tersembunyi + baris "Juga difilter".
         $html = $response->getContent();
-        $this->assertStringContainsString('<input type="hidden" name="cari" value="budi">', $html);
-        $this->assertStringContainsString('<input type="hidden" name="jenis_transaksi" value="setor">', $html);
-        $this->assertStringContainsString('<input type="hidden" name="rentang" value="30_hari">', $html);
-        $this->assertMatchesRegularExpression('/<p data-filter-dashboard>\s*Juga difilter: Setoran · 30 hari · &quot;budi&quot;/', $html);
-        // "Reset Filter" tetap hanya bergantung pada anggota_id/jenis_simpanan_id.
-        $response->assertDontSee('Reset Filter');
+        $xpath = $this->xpath($html);
+        $bilah = '//form[@data-filter-riwayat]';
+        $this->assertSame('budi', $xpath->query($bilah.'//input[@type="search"][@name="cari"]')->item(0)->getAttribute('value'));
+        $this->assertSame('Cari nama atau no. anggota', $xpath->query($bilah.'//input[@name="cari"]')->item(0)->getAttribute('placeholder'));
+        $this->assertSame('setor', $xpath->query($bilah.'//input[@name="jenis_transaksi"][@checked]')->item(0)->getAttribute('value'));
+        $this->assertSame('30_hari', $xpath->query($bilah.'//input[@type="hidden"][@name="rentang"]')->item(0)->getAttribute('value'));
+        $this->assertSame('30 hari', trim($xpath->query('//*[@data-dropdown-riwayat-transaksi="rentang"]//*[@data-dropdown-label]')->item(0)->textContent));
+        $this->assertStringNotContainsString('data-filter-dashboard', $html);
+        $this->assertStringNotContainsString('<input type="hidden" name="cari"', $html);
+        // H.3.5: Reset Filter muncul saat filter apa pun aktif.
+        $response->assertSee('Reset Filter');
     }
 
-    public function test_riwayat_tautan_hapus_filter_dashboard_mempertahankan_anggota_dan_jenis(): void
+    public function test_riwayat_reset_filter_muncul_untuk_filter_apa_pun_dan_menaut_tanpa_parameter(): void
     {
         $anggota = Anggota::factory()->create();
 
-        $html = $this->actingAs($this->admin)->get(route('transaksi.riwayat', [
-            'anggota_id' => $anggota->id, 'jenis_simpanan_id' => $this->sukarela->id, 'rentang' => 'hari_ini',
-        ]))->getContent();
+        foreach ([
+            ['anggota_id' => $anggota->id],
+            ['jenis_simpanan_id' => $this->sukarela->id],
+            ['cari' => 'budi'],
+            ['jenis_transaksi' => 'tarik'],
+            ['rentang' => 'hari_ini'],
+            ['rentang' => 'kustom', 'dari' => '2026-11-01', 'sampai' => '2026-11-05'],
+        ] as $query) {
+            $xpath = $this->xpath($this->actingAs($this->admin)->get(route('transaksi.riwayat', $query))->getContent());
+            $reset = $xpath->query('//form[@data-filter-riwayat]//a[@data-reset-riwayat-transaksi]');
 
-        preg_match('/<p data-filter-dashboard>.*?<a href="([^"]+)">Hapus<\/a>/s', $html, $cocok);
-        $this->assertSame(route('transaksi.riwayat', ['anggota_id' => $anggota->id, 'jenis_simpanan_id' => $this->sukarela->id]), html_entity_decode($cocok[1]));
+            $this->assertSame(1, $reset->length, json_encode($query));
+            $this->assertSame('Reset Filter', trim($reset->item(0)->textContent));
+            $this->assertSame(route('transaksi.riwayat'), $reset->item(0)->getAttribute('href'));
+        }
 
         $this->actingAs($this->admin)->get(route('transaksi.riwayat'))
-            ->assertDontSee('data-filter-dashboard', false)
-            ->assertDontSee('<input type="hidden" name="cari"', false);
+            ->assertDontSee('data-reset-riwayat-transaksi', false)
+            ->assertDontSee('data-filter-dashboard', false);
     }
 
     public function test_riwayat_nilai_filter_dashboard_tidak_valid_diabaikan(): void
@@ -839,9 +853,9 @@ class TransaksiSimpananTest extends TestCase
         ]));
 
         $response->assertOk()
-            ->assertViewHas('filter', ['anggota_id' => null, 'jenis_simpanan_id' => null, 'cari' => null, 'jenis_transaksi' => null, 'rentang' => null])
+            ->assertViewHas('filter', ['anggota_id' => null, 'jenis_simpanan_id' => null, 'cari' => null, 'jenis_transaksi' => null, 'rentang' => null, 'dari' => null, 'sampai' => null])
             ->assertViewHas('riwayat', fn ($r) => $r->count() === 1)
-            ->assertDontSee('data-filter-dashboard', false);
+            ->assertDontSee('data-reset-riwayat-transaksi', false);
     }
 
     public function test_form_tarik_menampilkan_keterangan_sukarela(): void
@@ -947,5 +961,298 @@ class TransaksiSimpananTest extends TestCase
             'tanggal_transaksi' => '2026-11-10',
             'keterangan' => str_repeat('a', 255),
         ])->assertSessionHasNoErrors();
+    }
+
+    // ---------------------------------------------------------------
+    // F4 §1 — form setor
+    // ---------------------------------------------------------------
+
+    public function test_form_setor_kartu_radio_jenis_awalan_rp_dan_kode_referensi(): void
+    {
+        $html = $this->actingAs($this->admin)->get(route('transaksi.setor.create'))->assertOk()->getContent();
+        $xpath = $this->xpath($html);
+
+        // Tiga radio jenis di dalam fieldset berlegenda; tidak ada select jenis lagi.
+        $radio = $xpath->query('//fieldset[@data-pilihan-jenis]//input[@type="radio"][@name="jenis_simpanan_id"]');
+        $this->assertSame(3, $radio->length);
+        $this->assertSame('Jenis simpanan', trim($xpath->query('//fieldset[@data-pilihan-jenis]/legend')->item(0)->textContent));
+        $this->assertSame(0, $xpath->query('//select[@name="jenis_simpanan_id"]')->length);
+        $this->assertSame(0, $xpath->query('//input[@name="jenis_simpanan_id"][@checked]')->length);
+        $this->assertSame(3, $xpath->query('//*[@data-keterangan-jenis]')->length);
+
+        // Awalan "Rp" elemen terpisah, bukan bagian dari value; input jumlah HTML biasa dengan urutan atribut tetap.
+        $this->assertSame('Rp', trim($xpath->query('//*[@data-awalan-rp]')->item(0)->textContent));
+        $this->assertStringContainsString('<input id="jumlah" type="text" inputmode="numeric" autocomplete="off" name="jumlah" value=""', $html);
+        $this->assertSame(1, $xpath->query('//input[@type="hidden"][@name="kode_referensi"]')->length);
+        $this->assertStringContainsString('Catatan (opsional)', $html);
+    }
+
+    public function test_form_setor_old_jenis_terpilih_dan_kartu_tanpa_merah(): void
+    {
+        $html = $this->actingAs($this->admin)
+            ->withSession(['_old_input' => ['jenis_simpanan_id' => (string) $this->wajib->id]])
+            ->get(route('transaksi.setor.create'))->assertOk()->getContent();
+        $xpath = $this->xpath($html);
+
+        $terpilih = $xpath->query('//input[@name="jenis_simpanan_id"][@checked]');
+        $this->assertSame(1, $terpilih->length);
+        $this->assertSame((string) $this->wajib->id, $terpilih->item(0)->getAttribute('value'));
+
+        // H.1.4: kartu terpilih arang, merah hanya untuk tombol Masuk.
+        $this->assertSame(1, preg_match('/<form[^>]*data-form-transaksi="setor".*?<\/form>/s', $html, $cocok));
+        $form = $cocok[0];
+        $this->assertStringNotContainsString('merah', $form);
+        $this->assertStringContainsString('peer-checked:border-arang', $form);
+    }
+
+    public function test_form_setor_keterangan_jenis_kosong_tidak_dirender(): void
+    {
+        $this->sukarela->update(['keterangan' => null]);
+
+        $xpath = $this->xpath($this->actingAs($this->admin)->get(route('transaksi.setor.create'))->getContent());
+
+        $this->assertSame(2, $xpath->query('//*[@data-keterangan-jenis]')->length);
+        $this->assertSame(3, $xpath->query('//*[@data-kartu-jenis]')->length);
+    }
+
+    // ---------------------------------------------------------------
+    // F4 §2 — form tarik
+    // ---------------------------------------------------------------
+
+    public function test_form_tarik_data_saldo_hanya_anggota_aktif_badge_dan_tanpa_field_jenis(): void
+    {
+        $budi = Anggota::factory()->create();
+        $siti = Anggota::factory()->create();
+        $tanpaSukarela = Anggota::factory()->create();
+        $keluar = Anggota::factory()->create();
+        $this->service->setor($budi->id, $this->sukarela->id, 200000, '2026-11-01', $this->admin->id);
+        $this->service->tarik($budi->id, 50000, '2026-11-02', $this->admin->id);
+        $this->service->setor($siti->id, $this->sukarela->id, 30000, '2026-11-01', $this->admin->id);
+        $this->service->setor($tanpaSukarela->id, $this->pokok->id, 100000, '2026-11-01', $this->admin->id);
+        $this->service->setor($keluar->id, $this->sukarela->id, 70000, '2026-11-01', $this->admin->id);
+        $keluar->update(['status' => Anggota::STATUS_NONAKTIF]);
+
+        $html = $this->actingAs($this->admin)->get(route('transaksi.tarik.create'))->assertOk()->getContent();
+        $xpath = $this->xpath($html);
+
+        // H.2.4: hanya anggota aktif; anggota tanpa transaksi Sukarela tidak ada di peta (JS membaca 0).
+        $data = json_decode($xpath->query('//script[@id="data-saldo"][@type="application/json"]')->item(0)->textContent, true);
+        $this->assertEquals([$budi->id => 150000, $siti->id => 30000], $data);
+
+        $this->assertSame('Simpanan Sukarela', trim($xpath->query('//*[@data-jenis-tarik]')->item(0)->textContent));
+        $this->assertStringNotContainsString('bg-emas', $xpath->query('//*[@data-jenis-tarik]')->item(0)->getAttribute('class'));
+        $this->assertSame(0, $xpath->query('//*[@name="jenis_simpanan_id"]')->length);
+        $this->assertStringNotContainsString('(Saldo Sukarela:', $html);
+
+        // Tanpa anggota terpilih, kotak saldo tersembunyi; peringatan tersedia tetapi tersembunyi.
+        $this->assertTrue($xpath->query('//*[@data-kotak-saldo]')->item(0)->hasAttribute('hidden'));
+        $peringatan = $xpath->query('//*[@data-peringatan-saldo]')->item(0);
+        $this->assertTrue($peringatan->hasAttribute('hidden'));
+        $this->assertSame('Melebihi saldo tersedia.', trim($peringatan->textContent));
+    }
+
+    public function test_form_tarik_kotak_saldo_langsung_tampil_untuk_anggota_terpilih(): void
+    {
+        $budi = Anggota::factory()->create();
+        $this->service->setor($budi->id, $this->sukarela->id, 125000, '2026-11-01', $this->admin->id);
+        $baru = Anggota::factory()->create();
+
+        $kotak = fn (array $query, array $old = []) => $this->xpath(
+            $this->actingAs($this->admin)->withSession(['_old_input' => $old])->get(route('transaksi.tarik.create', $query))->getContent()
+        );
+
+        $xpath = $kotak(['anggota_id' => $budi->id]);
+        $this->assertFalse($xpath->query('//*[@data-kotak-saldo]')->item(0)->hasAttribute('hidden'));
+        $this->assertSame('Rp 125.000', trim($xpath->query('//*[@data-nilai-saldo]')->item(0)->textContent));
+
+        // old('anggota_id') menang atas ?anggota_id=; anggota tanpa saldo Sukarela tampil Rp 0.
+        $xpath = $kotak(['anggota_id' => $budi->id], ['anggota_id' => (string) $baru->id]);
+        $this->assertSame('Rp 0', trim($xpath->query('//*[@data-nilai-saldo]')->item(0)->textContent));
+    }
+
+    public function test_aset_saldo_tarik_dimuat_lewat_dynamic_import_hanya_jika_data_saldo_ada(): void
+    {
+        $app = file_get_contents(resource_path('js/app.js'));
+
+        $this->assertMatchesRegularExpression("/if \\(document\\.getElementById\\('data-saldo'\\)\\) \\{\\s*import\\('\\.\\/transaksi-tarik'\\)/", $app);
+        $this->assertStringContainsString("'Rp ' + new Intl.NumberFormat('id-ID')", file_get_contents(resource_path('js/transaksi-tarik.js')));
+
+        $this->actingAs($this->admin)->get(route('transaksi.setor.create'))->assertDontSee('id="data-saldo"', false);
+    }
+
+    // ---------------------------------------------------------------
+    // F4 §3 — riwayat
+    // ---------------------------------------------------------------
+
+    public function test_riwayat_menerima_rentang_gabungan_dan_kustom(): void
+    {
+        $anggota = Anggota::factory()->create(['tanggal_bergabung' => '2026-01-01']);
+        $okt = $this->service->setor($anggota->id, $this->sukarela->id, 100000, '2026-10-14', $this->admin->id);
+        $nov = $this->service->setor($anggota->id, $this->sukarela->id, 50000, '2026-11-12', $this->admin->id);
+
+        foreach (TransaksiSimpanan::RENTANG_RIWAYAT as $rentang) {
+            if ($rentang !== 'kustom') {
+                $this->actingAs($this->admin)->get(route('transaksi.riwayat', ['rentang' => $rentang, 'dari' => '2026-01-01', 'sampai' => '2026-01-02']))
+                    ->assertViewHas('filter', fn ($filter) => $filter['rentang'] === $rentang && $filter['dari'] === null && $filter['sampai'] === null);
+            }
+        }
+
+        $ids = fn ($query) => $this->actingAs($this->admin)->get(route('transaksi.riwayat', $query))->viewData('riwayat')->pluck('id')->all();
+        $this->assertSame([$okt->id], $ids(['rentang' => 'bulan_lalu']));
+        $this->assertSame([$nov->id], $ids(['rentang' => 'hari_ini']));
+
+        // Kustom: dari > sampai ditukar; tanpa dua tanggal valid = tanpa filter.
+        $this->actingAs($this->admin)->get(route('transaksi.riwayat', ['rentang' => 'kustom', 'dari' => '2026-10-31', 'sampai' => '2026-10-01']))
+            ->assertViewHas('filter', fn ($filter) => $filter['rentang'] === 'kustom' && $filter['dari'] === '2026-10-01' && $filter['sampai'] === '2026-10-31')
+            ->assertViewHas('riwayat', fn ($r) => $r->pluck('id')->all() === [$okt->id]);
+        $this->actingAs($this->admin)->get(route('transaksi.riwayat', ['rentang' => 'kustom', 'dari' => '2026-10-01']))
+            ->assertViewHas('filter', fn ($filter) => $filter['rentang'] === null && $filter['dari'] === null && $filter['sampai'] === null)
+            ->assertViewHas('riwayat', fn ($r) => $r->count() === 2);
+
+        // Menu waktu memuat semua nilai RENTANG_RIWAYAT, "Pilih tanggal…" terakhir; kolom tanggal disabled kecuali kustom.
+        $xpath = $this->xpath($this->actingAs($this->admin)->get(route('transaksi.riwayat'))->getContent());
+        $nilai = array_map(fn ($el) => $el->getAttribute('data-nilai'), iterator_to_array($xpath->query('//*[@data-dropdown-riwayat-transaksi="rentang"]//*[@role="menuitemradio"]')));
+        $this->assertSame(array_merge([''], TransaksiSimpanan::RENTANG_RIWAYAT), $nilai);
+        $this->assertSame(2, $xpath->query('//*[@data-rentang-tanggal]//input[@disabled]')->length);
+
+        $xpath = $this->xpath($this->actingAs($this->admin)->get(route('transaksi.riwayat', ['rentang' => 'kustom', 'dari' => '2026-10-01', 'sampai' => '2026-10-31']))->getContent());
+        $this->assertSame(0, $xpath->query('//*[@data-rentang-tanggal]//input[@disabled]')->length);
+        $this->assertSame('Pilih tanggal…', trim($xpath->query('//*[@data-dropdown-riwayat-transaksi="rentang"]//*[@data-dropdown-label]')->item(0)->textContent));
+    }
+
+    public function test_tautan_lihat_semua_dari_dashboard_tetap_berlaku_di_riwayat(): void
+    {
+        $anggota = Anggota::factory()->create(['nama' => 'Budi Santoso', 'tanggal_bergabung' => '2026-01-01']);
+        for ($i = 0; $i < 12; $i++) {
+            $this->service->setor($anggota->id, $this->sukarela->id, 1000, '2026-11-'.str_pad((string) ($i + 1), 2, '0', STR_PAD_LEFT), $this->admin->id);
+        }
+        $this->service->setor($anggota->id, $this->pokok->id, 1000, '2026-10-01', $this->admin->id); // di luar 30 hari
+
+        $dashboard = $this->actingAs($this->admin)->get(route('dashboard', ['cari' => 'budi', 'rentang' => '30_hari', 'jenis_simpanan_id' => $this->sukarela->id]))->getContent();
+        $href = html_entity_decode($this->xpath($dashboard)->query('//a[@data-lihat-semua-transaksi]')->item(0)->getAttribute('href'));
+
+        $this->actingAs($this->admin)->get($href)->assertOk()
+            ->assertViewHas('filter', fn ($filter) => $filter['cari'] === 'budi' && $filter['rentang'] === '30_hari' && $filter['jenis_simpanan_id'] === (string) $this->sukarela->id)
+            ->assertViewHas('riwayat', fn ($r) => $r->total() === 12);
+    }
+
+    public function test_riwayat_id_anggota_dan_jenis_hanya_diterima_jika_ada(): void
+    {
+        $anggota = Anggota::factory()->create();
+        $nonaktif = Anggota::factory()->nonaktif()->create();
+        $this->service->setor($anggota->id, $this->sukarela->id, 50000, '2026-11-10', $this->admin->id);
+
+        foreach ([['anggota_id' => 99999], ['anggota_id' => 'abc'], ['jenis_simpanan_id' => 999], ['jenis_simpanan_id' => '1 OR 1']] as $query) {
+            $this->actingAs($this->admin)->get(route('transaksi.riwayat', $query))->assertOk()
+                ->assertViewHas('filter', fn ($filter) => $filter['anggota_id'] === null && $filter['jenis_simpanan_id'] === null)
+                ->assertViewHas('riwayat', fn ($r) => $r->count() === 1)
+                ->assertDontSee('data-reset-riwayat-transaksi', false);
+        }
+
+        // Anggota nonaktif tetap boleh dipilih (BR-21).
+        $this->actingAs($this->admin)->get(route('transaksi.riwayat', ['anggota_id' => $nonaktif->id]))
+            ->assertViewHas('filter', fn ($filter) => $filter['anggota_id'] === (string) $nonaktif->id)
+            ->assertViewHas('riwayat', fn ($r) => $r->count() === 0)
+            ->assertSee('Tidak ada transaksi yang cocok dengan filter.');
+    }
+
+    public function test_riwayat_ringkasan_setor_tarik_mengikuti_filter(): void
+    {
+        $budi = Anggota::factory()->create(['nama' => 'Budi Santoso', 'tanggal_bergabung' => '2026-01-01']);
+        $siti = Anggota::factory()->create(['nama' => 'Siti Aminah', 'tanggal_bergabung' => '2026-01-01']);
+        $this->service->setor($budi->id, $this->sukarela->id, 200000, '2026-11-01', $this->admin->id);
+        $this->service->tarik($budi->id, 50000, '2026-11-02', $this->admin->id);
+        $this->service->setor($budi->id, $this->pokok->id, 100000, '2026-10-01', $this->admin->id);
+        $this->service->setor($siti->id, $this->wajib->id, 30000, '2026-11-03', $this->admin->id);
+
+        $ringkasan = function (array $query) {
+            $response = $this->actingAs($this->admin)->get(route('transaksi.riwayat', $query));
+            $teks = trim(preg_replace('/\s+/', ' ', $this->xpath($response->getContent())->query('//*[@data-ringkasan-riwayat-transaksi]')->item(0)->textContent));
+
+            return [$response->viewData('ringkasan'), $teks];
+        };
+
+        $this->assertSame([['total_setor' => 330000.0, 'total_tarik' => 50000.0], '4 transaksi · Setor Rp 330.000 · Tarik Rp 50.000'], $ringkasan([]));
+        $this->assertSame([['total_setor' => 300000.0, 'total_tarik' => 50000.0], '3 transaksi · Setor Rp 300.000 · Tarik Rp 50.000'], $ringkasan(['anggota_id' => $budi->id]));
+        $this->assertSame([['total_setor' => 230000.0, 'total_tarik' => 50000.0], '3 transaksi · Setor Rp 230.000 · Tarik Rp 50.000'], $ringkasan(['rentang' => 'bulan_ini']));
+        $this->assertSame([['total_setor' => 0.0, 'total_tarik' => 50000.0], '1 transaksi · Setor Rp 0 · Tarik Rp 50.000'], $ringkasan(['jenis_transaksi' => 'tarik']));
+        $this->assertSame([['total_setor' => 30000.0, 'total_tarik' => 0.0], '1 transaksi · Setor Rp 30.000 · Tarik Rp 0'], $ringkasan(['cari' => 'siti']));
+    }
+
+    public function test_riwayat_paginasi_tanpa_input_kosong_dan_bilah_memulihkan_input_saat_pageshow(): void
+    {
+        $anggota = Anggota::factory()->create(['tanggal_bergabung' => '2026-01-01']);
+        for ($i = 0; $i < 21; $i++) {
+            $this->service->setor($anggota->id, $this->sukarela->id, 1000, '2026-11-01', $this->admin->id);
+        }
+
+        // URL dari bilah yang input kosongnya sudah di-disabled hanya membawa kunci terisi.
+        $html = $this->actingAs($this->admin)->get(route('transaksi.riwayat', ['jenis_transaksi' => 'setor']))->getContent();
+        $this->assertSame(1, preg_match('/<nav[^>]*data-pagination[^>]*>.*?<\/nav>/s', $html, $nav));
+        preg_match('/<a href="([^"]+)" rel="next"/', $nav[0], $berikut);
+        $this->assertSame(route('transaksi.riwayat', ['jenis_transaksi' => 'setor', 'page' => 2]), html_entity_decode($berikut[1]));
+
+        // H.3.4 / H.6.5: markup menonaktifkan input kosong saat submit dan memulihkannya saat pageshow.
+        $this->assertSame(1, preg_match('/<form[^>]*data-filter-riwayat.*?<\/form>/s', $html, $form));
+        $this->assertStringContainsString('x-on:submit="bersihkan()"', $form[0]);
+        $this->assertStringContainsString('x-on:pageshow.window="pulihkan()"', $form[0]);
+        $this->assertStringContainsString("el.value === ''", $form[0]);
+        $this->assertStringContainsString('data-dimatikan-kosong', $form[0]);
+        // Form tidak membawa page, jadi filter baru kembali ke halaman 1; "Terapkan Filter" tetap ada (sr-only).
+        $this->assertStringNotContainsString('name="page"', $form[0]);
+        $this->assertMatchesRegularExpression('/<button type="submit" class="sr-only">Terapkan Filter<\/button>/', $form[0]);
+    }
+
+    public function test_riwayat_kolom_tabel_nominal_bertanda_dan_catatan(): void
+    {
+        $anggota = Anggota::factory()->create(['nama' => 'Budi Santoso']);
+        $catatan = 'Setoran untuk biaya pendidikan anak pertama semester ganjil';
+        $setor = $this->service->setor($anggota->id, $this->sukarela->id, 150000, '2026-11-01', $this->admin->id);
+        $setor->update(['keterangan' => $catatan]);
+        $this->service->tarik($anggota->id, 50000, '2026-11-02', $this->admin->id);
+
+        $html = $this->actingAs($this->admin)->get(route('transaksi.riwayat'))->getContent();
+        $xpath = $this->xpath($html);
+
+        $kepala = array_map(fn ($th) => trim($th->textContent), iterator_to_array($xpath->query('//*[@data-kartu-riwayat-transaksi]//thead//th')));
+        $this->assertSame(['Tanggal', 'Anggota', 'Transaksi', 'Jumlah', 'Saldo jenis ini', 'Dicatat oleh', 'Catatan'], $kepala);
+        $this->assertSame(1, $xpath->query('//th[@title="Saldo jenis simpanan ini setelah transaksi"]')->length);
+
+        $this->assertSame('+Rp 150.000', trim($xpath->query('//tr[@data-transaksi="setor"]//*[@data-nominal]')->item(0)->textContent));
+        $this->assertSame('-Rp 50.000', trim($xpath->query('//tr[@data-transaksi="tarik"]//*[@data-nominal]')->item(0)->textContent));
+        $this->assertStringContainsString('text-setor', $xpath->query('//tr[@data-transaksi="setor"]//*[@data-nominal]')->item(0)->getAttribute('class'));
+        $this->assertStringContainsString('text-tarik', $xpath->query('//tr[@data-transaksi="tarik"]//*[@data-nominal]')->item(0)->getAttribute('class'));
+        $this->assertStringNotContainsString('−', $html);
+
+        // Nama sekali lewat x-nama-anggota, no. anggota di bawahnya; tanpa avatar dan tanpa badge success/danger.
+        $baris = $xpath->query('//tr[@data-transaksi="setor"]')->item(0);
+        $this->assertSame(1, substr_count($baris->textContent, 'Budi Santoso'));
+        $this->assertStringContainsString($anggota->no_anggota, $baris->textContent);
+        $this->assertStringNotContainsString('bg-emerald-50', $html);
+
+        $sel = $xpath->query('//*[@data-catatan]')->item(0);
+        $this->assertSame($catatan, $sel->getAttribute('title'));
+        $this->assertSame(Str::limit($catatan, 40), trim($sel->textContent));
+        $this->assertSame('', trim($xpath->query('//tr[@data-transaksi="tarik"]//*[@data-sel-catatan]')->item(0)->textContent));
+    }
+
+    public function test_riwayat_keadaan_kosong_tanpa_dan_dengan_filter(): void
+    {
+        $this->actingAs($this->admin)->get(route('transaksi.riwayat'))
+            ->assertSee('Belum ada transaksi.')
+            ->assertDontSee('Tidak ada transaksi yang cocok dengan filter.');
+
+        $xpath = $this->xpath($this->actingAs($this->admin)->get(route('transaksi.riwayat', ['cari' => 'tidak ada']))->getContent());
+        $kosong = $xpath->query('//*[@data-kosong-filter]')->item(0);
+        $this->assertStringContainsString('Tidak ada transaksi yang cocok dengan filter.', $kosong->textContent);
+        $this->assertSame(route('transaksi.riwayat'), $xpath->query('//*[@data-kosong-filter]//a[normalize-space()="Reset Filter"]')->item(0)->getAttribute('href'));
+    }
+
+    private function xpath(string $html): \DOMXPath
+    {
+        $dom = new \DOMDocument;
+        @$dom->loadHTML('<?xml encoding="UTF-8">'.$html);
+
+        return new \DOMXPath($dom);
     }
 }

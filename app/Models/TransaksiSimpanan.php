@@ -35,18 +35,25 @@ class TransaksiSimpanan extends Model
         'saldo_akhir' => 'decimal:2',
     ];
 
-    /** Nilai `rentang` yang diterima Dashboard dan Riwayat (F2c D.1). Sengaja tidak diubah di F3b (H.2.1). */
+    /** Nilai `rentang` yang diterima Dashboard (F2c D.1). Sengaja tidak diubah di F3b (H.2.1) maupun F4. */
     public const RENTANG = ['hari_ini', '7_hari', '30_hari', 'bulan_ini'];
 
     /** Nilai `rentang` yang diterima riwayat di detail anggota (F3b E.1, H.2.1). */
     public const RENTANG_RIWAYAT_ANGGOTA = ['bulan_ini', 'bulan_lalu', '3_bulan', 'tahun_ini', 'kustom'];
 
     /**
+     * Nilai `rentang` yang diterima halaman Riwayat transaksi (F4 H.3.1): gabungan RENTANG (supaya tautan
+     * "Lihat semua" dari dashboard tetap berlaku) dan RENTANG_RIWAYAT_ANGGOTA.
+     */
+    public const RENTANG_RIWAYAT = ['hari_ini', '7_hari', '30_hari', 'bulan_ini', 'bulan_lalu', '3_bulan', 'tahun_ini', 'kustom'];
+
+    /**
      * Filter transaksi (F2c D.1; dipakai dashboard, Riwayat, dan detail anggota sejak F3b).
      * Kunci: cari, jenis_transaksi, jenis_simpanan_id, rentang, dan dari/sampai (hanya untuk rentang=kustom).
-     * Scope mengenali gabungan RENTANG dan RENTANG_RIWAYAT_ANGGOTA; tiap controller membatasi sendiri
-     * rentang yang diterimanya. Nilai kosong atau tidak valid diabaikan diam-diam. Rentang yang berjalan
-     * dihitung dari now() dan termasuk hari ini.
+     * Scope mengenali semua nilai RENTANG_RIWAYAT; tiap controller membatasi sendiri rentang yang
+     * diterimanya (dashboard RENTANG, detail anggota RENTANG_RIWAYAT_ANGGOTA, Riwayat RENTANG_RIWAYAT).
+     * Nilai kosong atau tidak valid diabaikan diam-diam. Rentang yang berjalan dihitung dari now() dan
+     * termasuk hari ini.
      *
      * @param  array<string, mixed>  $filter
      */

@@ -10,3 +10,8 @@ Alpine.start();
 if (document.getElementById('grafik-arus') || document.getElementById('grafik-komposisi')) {
     import('./grafik/arus-simpanan').then(({ default: pasangGrafikDashboard }) => pasangGrafikDashboard());
 }
+
+// Saldo tersedia di form tarik (F4 §2, H.2.4): hanya dimuat jika data saldo ada di halaman.
+if (document.getElementById('data-saldo')) {
+    import('./transaksi-tarik').then(({ default: pasangSaldoTarik }) => pasangSaldoTarik());
+}
