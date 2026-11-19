@@ -348,6 +348,92 @@ class LaporanKeseluruhanTest extends TestCase
         $this->assertSame(1, substr_count($html, 'data-cegah-kirim-ganda'));
     }
 
+    // ---------------------------------------------------------------
+    // F5 A — ringkasan, bingkai pratinjau, dan paginasi
+    // ---------------------------------------------------------------
+
+    public function test_ringkasan_tiga_stat_dari_total_dan_pratinjau_di_dalam_bingkai(): void
+    {
+        $html = $this->actingAs($this->admin)->get(route('laporan.keseluruhan'))->assertOk()->getContent();
+        $xpath = $this->xpath($html);
+
+        // Nilai diambil dari $laporan['total'] (Rp 600.000, Rp 75.000, Rp 525.000), urut setor, tarik, saldo.
+        $stat = [];
+        foreach ($xpath->query('//*[@data-stat]') as $elemen) {
+            $stat[$elemen->getAttribute('data-stat')] = preg_replace('/\s+/', ' ', trim($elemen->textContent));
+        }
+        $this->assertSame(['total_setor', 'total_tarik', 'saldo_akhir_periode'], array_keys($stat));
+        $this->assertSame('Total setor Rp 600.000', $stat['total_setor']);
+        $this->assertSame('Total tarik Rp 75.000', $stat['total_tarik']);
+        $this->assertSame('Saldo akhir periode Rp 525.000', $stat['saldo_akhir_periode']);
+
+        // H.2.2: titik setor/tarik di label; saldo netral tanpa titik dan tanpa warna naik/turun.
+        $this->assertSame(1, $xpath->query('//*[@data-stat="total_setor"]//*[@data-titik-stat][contains(@class, "bg-setor")]')->length);
+        $this->assertSame(1, $xpath->query('//*[@data-stat="total_tarik"]//*[@data-titik-stat][contains(@class, "bg-tarik")]')->length);
+        $this->assertSame(0, $xpath->query('//*[@data-stat="saldo_akhir_periode"]//*[@data-titik-stat]')->length);
+        $this->assertSame(0, $xpath->query('//*[@data-stat]//*[contains(@class, "text-naik") or contains(@class, "text-turun")]')->length);
+
+        // Pratinjau berada di dalam bingkai .laporan-pratinjau, dengan label "Pratinjau cetak".
+        $bingkai = '//*[contains(concat(" ", normalize-space(@class), " "), " laporan-pratinjau ")]';
+        $this->assertSame(1, $xpath->query($bingkai.'//*[@data-pratinjau-laporan="keseluruhan"]')->length);
+        $this->assertSame('Pratinjau cetak', trim($xpath->query('//*[@data-label-pratinjau]')->item(0)->textContent));
+        $this->assertStringContainsString('.laporan-pratinjau', file_get_contents(resource_path('css/app.css')));
+    }
+
+    public function test_pagination_pratinjau_membawa_filter_dan_tombol_unduh_tanpa_page(): void
+    {
+        for ($i = 0; $i < 52; $i++) {
+            $this->service->setor($this->siti->id, $this->wajib->id, 1000, '2026-11-10', $this->admin->id);
+        }
+        // 6 setor skenario + 52 = 58 setor → halaman 2 berisi 8.
+        $query = ['jenis_transaksi' => 'setor'];
+
+        $halaman2 = $this->actingAs($this->admin)->get(route('laporan.keseluruhan', $query + ['page' => '2']));
+        $halaman2->assertOk();
+        $this->assertSame(2, $halaman2->viewData('laporan')['transaksi']->currentPage());
+        $this->assertCount(8, $halaman2->viewData('laporan')['transaksi']->items());
+
+        // Tombol unduh di halaman 2 tetap membawa filter, tanpa page.
+        $xpath = $this->xpath($halaman2->getContent());
+        foreach (['pdf' => 'laporan.keseluruhan.pdf', 'excel' => 'laporan.keseluruhan.excel'] as $jenis => $nama) {
+            $href = $xpath->query('//a[@data-tombol-unduh="'.$jenis.'"]')->item(0)->getAttribute('href');
+            $this->assertSame(route($nama, $query), $href);
+        }
+
+        // Tautan pagination halaman 1 membawa filter yang sama (withQueryString), dan berada di luar dokumen cetak.
+        $xpath = $this->xpath($this->actingAs($this->admin)->get(route('laporan.keseluruhan', $query))->getContent());
+        $berikut = $xpath->query('//nav[@data-pagination]//a[@rel="next"]')->item(0)->getAttribute('href');
+        parse_str((string) parse_url($berikut, PHP_URL_QUERY), $parameter);
+        $this->assertSame(['jenis_transaksi' => 'setor', 'page' => '2'], $parameter);
+        $this->assertSame(0, $xpath->query('//*[contains(concat(" ", normalize-space(@class), " "), " lap-dokumen ")]//nav[@data-pagination]')->length);
+        $this->assertSame(1, $xpath->query('//*[@data-kartu-pratinjau]//nav[@data-pagination]')->length);
+    }
+
+    public function test_kartu_filter_memakai_komponen_input_dan_reset_hanya_saat_ada_filter(): void
+    {
+        $xpath = $this->xpath($this->actingAs($this->admin)->get(route('laporan.keseluruhan'))->getContent());
+        $form = '//*[@data-filter-laporan]//form[@method="GET"]';
+
+        foreach (['tanggal_mulai', 'tanggal_selesai', 'jenis_simpanan_id', 'jenis_transaksi', 'status_anggota'] as $nama) {
+            $this->assertSame(1, $xpath->query($form.'//*[@name="'.$nama.'"][contains(@class, "focus:border-arang")]')->length, $nama);
+        }
+        $this->assertSame(1, $xpath->query($form.'//button[@type="submit"][normalize-space()="Tampilkan"]')->length);
+        $this->assertSame(0, $xpath->query('//a[@data-reset-laporan]')->length);
+
+        $xpath = $this->xpath($this->actingAs($this->admin)->get(route('laporan.keseluruhan', ['status_anggota' => 'aktif']))->getContent());
+        $reset = $xpath->query('//a[@data-reset-laporan]')->item(0);
+        $this->assertSame('Reset Filter', trim($reset->textContent));
+        $this->assertSame(route('laporan.keseluruhan'), $reset->getAttribute('href'));
+    }
+
+    private function xpath(string $html): \DOMXPath
+    {
+        $dom = new \DOMDocument;
+        @$dom->loadHTML('<?xml encoding="UTF-8">'.$html);
+
+        return new \DOMXPath($dom);
+    }
+
     public function test_unduh_pdf_menghasilkan_lampiran_pdf(): void
     {
         $response = $this->actingAs($this->admin)->get(route('laporan.keseluruhan.pdf', ['status_anggota' => 'aktif']));

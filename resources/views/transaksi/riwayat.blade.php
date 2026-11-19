@@ -1,20 +1,12 @@
 @php
+    use App\Http\Controllers\TransaksiSimpananController;
     use App\Models\TransaksiSimpanan;
     use App\Support\Format;
 
     // F4 H.3.4: pilihan bilah filter. Kunci kosong = tanpa filter. Satu peta label; tampilan selalu lewat ?? cadangan.
     $segmen = ['' => 'Semua', TransaksiSimpanan::SETOR => 'Setoran', TransaksiSimpanan::TARIK => 'Penarikan'];
     $pilihanJenis = ['' => 'Semua jenis'] + $jenisSimpanan->mapWithKeys(fn ($jenis) => [(string) $jenis->id => str_replace('Simpanan ', '', $jenis->nama_jenis)])->all();
-    $pilihanWaktu = [
-        '' => 'Semua waktu',
-        'hari_ini' => 'Hari ini',
-        '7_hari' => '7 hari',
-        '30_hari' => '30 hari',
-        'bulan_ini' => 'Bulan ini',
-        'bulan_lalu' => 'Bulan lalu',
-        '3_bulan' => '3 bulan terakhir',
-        'tahun_ini' => 'Tahun ini',
-    ];
+    $pilihanWaktu = TransaksiSimpananController::LABEL_RENTANG_RIWAYAT;
     $labelWaktu = $pilihanWaktu + ['kustom' => 'Pilih tanggal…'];
     $rentangAktif = $filter['rentang'] ?? '';
     $jenisAktif = $filter['jenis_simpanan_id'] ?? '';
@@ -26,22 +18,42 @@
     $labelAnggota = fn ($anggota) => $anggota->no_anggota.' - '.Format::namaAnggota($anggota->nama, $anggota->status);
     $anggotaFilter = $anggotaList->first(fn ($anggota) => (string) $anggota->id === $filter['anggota_id']);
 
-    // Ringkasan: label periode dari peta label waktu dropdown; rentang kustom memakai tanggal yang dipilih.
-    $labelPeriode = $pilihanWaktu[$rentangAktif] ?? 'Semua waktu';
-    if ($rentangAktif === 'kustom') {
-        $labelPeriode = match (true) {
-            $filter['dari'] !== null && $filter['sampai'] !== null => Format::tanggalPendek($filter['dari']).' – '.Format::tanggalPendek($filter['sampai']),
-            $filter['dari'] !== null => 'Sejak '.Format::tanggalPendek($filter['dari']),
-            $filter['sampai'] !== null => 'Sampai '.Format::tanggalPendek($filter['sampai']),
-            default => 'Semua waktu',
-        };
-    }
+    // Ringkasan: label periode dari helper bersama halaman dan ekspor (F5 H.5.5).
+    $labelPeriode = TransaksiSimpananController::labelPeriodeRiwayat($filter);
     $bersih = round((float) $ringkasan['total_setor'] - (float) $ringkasan['total_tarik'], 2);
+
+    // F5 H.5.9: tautan unduh membawa filter aktif (tanpa page); PDF nonaktif jika melebihi batas baris.
+    $queryUnduh = array_filter($filter, fn ($nilai) => $nilai !== null);
+    $pdfTerlaluBanyak = $riwayat->total() > TransaksiSimpananController::BATAS_PDF_RIWAYAT;
+    $kelasItemUnduh = 'flex w-full items-center gap-2 px-3 py-2 text-left text-sm';
 @endphp
 
 <x-app-layout>
     <x-ui.page-header title="Riwayat transaksi" subtitle="Semua setoran dan penarikan simpanan.">
         <x-slot:actions>
+            @if ($riwayat->total() > 0)
+                <div class="relative" data-unduh-riwayat x-data="{ buka: false }"
+                     x-on:keydown.escape.window="if (buka) { buka = false; $refs.pemicu.focus() }"
+                     x-on:click.outside="buka = false">
+                    <x-ui.button variant="secondary" type="button" icon="document-arrow-down" x-ref="pemicu" x-on:click="buka = ! buka"
+                                 aria-haspopup="menu" aria-controls="menu-unduh-riwayat" aria-expanded="false" x-bind:aria-expanded="buka.toString()">
+                        Unduh
+                        <x-ui.icon name="chevron-down" class="h-4 w-4 text-stone-500" />
+                    </x-ui.button>
+                    <div id="menu-unduh-riwayat" role="menu" aria-label="Unduh riwayat" x-cloak x-show="buka" x-transition.opacity.duration.100ms
+                         class="absolute right-0 z-30 mt-2 w-56 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg">
+                        <a href="{{ route('transaksi.riwayat.excel', $queryUnduh) }}" role="menuitem" data-unduh="excel"
+                           class="{{ $kelasItemUnduh }} text-stone-700 hover:bg-stone-50 focus:bg-stone-50 focus:outline-none">Excel (.xlsx)</a>
+                        @if ($pdfTerlaluBanyak)
+                            <span role="menuitem" aria-disabled="true" data-unduh="pdf" title="Lebih dari {{ number_format(TransaksiSimpananController::BATAS_PDF_RIWAYAT, 0, ',', '.') }} transaksi, pakai Excel atau persempit filter."
+                                  class="{{ $kelasItemUnduh }} cursor-not-allowed text-stone-400">PDF (.pdf)</span>
+                        @else
+                            <a href="{{ route('transaksi.riwayat.pdf', $queryUnduh) }}" role="menuitem" data-unduh="pdf"
+                               class="{{ $kelasItemUnduh }} text-stone-700 hover:bg-stone-50 focus:bg-stone-50 focus:outline-none">PDF (.pdf)</a>
+                        @endif
+                    </div>
+                </div>
+            @endif
             <x-ui.button variant="secondary" :href="route('transaksi.setor.create')" icon="arrow-down-tray">Catat setoran</x-ui.button>
             <x-ui.button variant="secondary" :href="route('transaksi.tarik.create')" icon="arrow-up-tray">Catat penarikan</x-ui.button>
         </x-slot:actions>

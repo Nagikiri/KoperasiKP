@@ -149,6 +149,94 @@ class LaporanTest extends TestCase
         $this->assertSame('2026-11-05', $denganParameter->viewData('filter')['tanggal_mulai']);
     }
 
+    // ---------------------------------------------------------------
+    // F5 B — kartu filter dan keadaan kosong
+    // ---------------------------------------------------------------
+
+    public function test_sebelum_tampilkan_keadaan_kosong_tanpa_tombol_unduh_dan_pratinjau(): void
+    {
+        $html = $this->actingAs($this->admin)->get(route('laporan.anggota'))->assertOk()->getContent();
+        $xpath = $this->xpath($html);
+
+        $kosong = $xpath->query('//*[@data-laporan-kosong]')->item(0);
+        $this->assertNotNull($kosong);
+        $this->assertStringContainsString('Pilih anggota dan periode', $kosong->textContent);
+        $this->assertStringContainsString('Kosongkan anggota untuk membuat laporan semua anggota.', $kosong->textContent);
+        $this->assertSame(0, $xpath->query('//*[@data-tombol-unduh]')->length);
+        $this->assertSame(0, $xpath->query('//*[@data-pratinjau-laporan]')->length);
+        $this->assertSame(0, $xpath->query('//a[@data-reset-laporan]')->length);
+        $this->assertStringContainsString('<input type="hidden" name="tampilkan" value="1">', $html);
+
+        // Setelah Tampilkan: tanpa keadaan kosong, pratinjau di dalam bingkai, reset menaut tanpa parameter.
+        $xpath = $this->xpath($this->actingAs($this->admin)->get(route('laporan.anggota', ['tampilkan' => '1']))->getContent());
+        $this->assertSame(0, $xpath->query('//*[@data-laporan-kosong]')->length);
+        $this->assertSame(1, $xpath->query('//*[contains(concat(" ", normalize-space(@class), " "), " laporan-pratinjau ")]//*[@data-pratinjau-laporan="per-anggota"]')->length);
+        $this->assertSame('Pratinjau cetak', trim($xpath->query('//*[@data-label-pratinjau]')->item(0)->textContent));
+        $reset = $xpath->query('//a[@data-reset-laporan]')->item(0);
+        $this->assertSame('Reset Filter', trim($reset->textContent));
+        $this->assertSame(route('laporan.anggota'), $reset->getAttribute('href'));
+    }
+
+    public function test_pemilih_anggota_laporan_berisi_semua_anggota_termasuk_nonaktif_dan_nilai_dari_filter(): void
+    {
+        $xpath = $this->xpath($this->actingAs($this->admin)->get(route('laporan.anggota'))->getContent());
+        $pemilih = '//form[@action="'.route('laporan.anggota').'"]//*[@data-pilih-anggota-cari]';
+
+        // Label terlihat, opsi pertama "Semua anggota" (nilai kosong), lalu semua anggota urut nama termasuk nonaktif.
+        $this->assertSame('Anggota', trim($xpath->query($pemilih.'//label')->item(0)->textContent));
+        $opsi = [];
+        foreach ($xpath->query($pemilih.'//*[@data-opsi-anggota]') as $li) {
+            $opsi[$li->getAttribute('data-opsi-anggota')] = trim($xpath->query('.//*[@data-label-opsi]', $li)->item(0)->textContent);
+        }
+        $this->assertSame([
+            '' => 'Semua anggota',
+            (string) $this->andi->id => "{$this->andi->no_anggota} - Andi (Nonaktif)",
+            (string) $this->budi->id => "{$this->budi->no_anggota} - Budi",
+            (string) $this->siti->id => "{$this->siti->no_anggota} - Siti",
+        ], $opsi);
+        $this->assertSame('', $xpath->query($pemilih.'//input[@type="hidden"][@name="anggota_id"]')->item(0)->getAttribute('value'));
+        $this->assertSame('Semua anggota', trim($xpath->query($pemilih.'//*[@data-anggota-terpilih]')->item(0)->textContent));
+        // Tidak ada <select name="anggota_id"> lama.
+        $this->assertSame(0, $xpath->query('//select[@name="anggota_id"]')->length);
+
+        // Nilai awal dari $filter: anggota terpilih tampil di pemicu dan input tersembunyi.
+        $xpath = $this->xpath($this->actingAs($this->admin)->get(route('laporan.anggota', ['tampilkan' => '1', 'anggota_id' => (string) $this->budi->id]))->getContent());
+        $this->assertSame((string) $this->budi->id, $xpath->query($pemilih.'//input[@name="anggota_id"]')->item(0)->getAttribute('value'));
+        $this->assertSame("{$this->budi->no_anggota} - Budi", trim($xpath->query($pemilih.'//*[@data-anggota-terpilih]')->item(0)->textContent));
+    }
+
+    public function test_status_anggota_disabled_saat_anggota_terpilih_dan_error_anggota_tampil_di_bawah_pemicu(): void
+    {
+        $status = fn (array $query) => $this->xpath($this->actingAs($this->admin)->get(route('laporan.anggota', $query))->getContent())
+            ->query('//select[@name="status_anggota"]')->item(0);
+
+        $semua = $status(['tampilkan' => '1']);
+        $this->assertFalse($semua->hasAttribute('disabled'));
+        $this->assertSame("anggota !== ''", $semua->getAttribute('x-bind:disabled'));
+        $this->assertTrue($status(['tampilkan' => '1', 'anggota_id' => (string) $this->budi->id])->hasAttribute('disabled'));
+
+        // Form mengikuti event anggota-dipilih dari partial.
+        $html = $this->actingAs($this->admin)->get(route('laporan.anggota'))->getContent();
+        $this->assertStringContainsString('x-on:anggota-dipilih="anggota = $event.detail.id"', $html);
+
+        // Error anggota_id (exists) tampil di bawah pemicu partial.
+        $html = $this->actingAs($this->admin)
+            ->from(route('laporan.anggota'))
+            ->followingRedirects()
+            ->get(route('laporan.anggota', ['tampilkan' => '1', 'anggota_id' => '999']))
+            ->getContent();
+        $error = $this->xpath($html)->query('//*[@data-pilih-anggota-cari]//p[contains(@class, "text-red-700")]');
+        $this->assertSame(1, $error->length);
+    }
+
+    private function xpath(string $html): \DOMXPath
+    {
+        $dom = new \DOMDocument;
+        @$dom->loadHTML('<?xml encoding="UTF-8">'.$html);
+
+        return new \DOMXPath($dom);
+    }
+
     public function test_semua_anggota_saat_anggota_kosong(): void
     {
         $laporan = $this->tampilkan();
@@ -410,15 +498,36 @@ class LaporanTest extends TestCase
             ->assertSee(route('laporan.anggota.excel', $query));
     }
 
-    public function test_tombol_unduh_tampil_sebagai_tombol_breeze(): void
+    public function test_tombol_unduh_memakai_komponen_tombol(): void
     {
-        $html = $this->actingAs($this->admin)
-            ->get(route('laporan.anggota', ['tampilkan' => '1', 'anggota_id' => (string) $this->budi->id]))
-            ->getContent();
+        $query = ['anggota_id' => (string) $this->budi->id, 'tanggal_mulai' => '2026-11-01', 'tanggal_selesai' => '2026-11-03'];
+        $xpath = $this->xpath($this->actingAs($this->admin)
+            ->get(route('laporan.anggota', $query + ['tampilkan' => '1']))
+            ->getContent());
 
-        // Kelas dasar x-primary-button (PDF) dan x-secondary-button (Excel).
-        $this->assertMatchesRegularExpression('/<a href="[^"]+" data-tombol-unduh="pdf"\s+class="inline-flex items-center px-4 py-2 bg-gray-800[^"]*">Unduh PDF<\/a>/', $html);
-        $this->assertMatchesRegularExpression('/<a href="[^"]+" data-tombol-unduh="excel"\s+class="inline-flex items-center px-4 py-2 bg-white border border-gray-300[^"]*">Unduh Excel<\/a>/', $html);
+        // F5 C / H.4.3: tepat satu <a> per jenis, teks persis, href = route dengan query filter yang sama (dibandingkan setelah parse).
+        foreach (['pdf' => ['Unduh PDF', 'laporan.anggota.pdf'], 'excel' => ['Unduh Excel', 'laporan.anggota.excel']] as $jenis => [$teks, $nama]) {
+            $tombol = $xpath->query('//a[@data-tombol-unduh="'.$jenis.'"]');
+            $this->assertSame(1, $tombol->length, $jenis);
+            $this->assertSame(1, $xpath->query('//*[@data-tombol-unduh="'.$jenis.'"]')->length, $jenis);
+            $this->assertSame($teks, trim($tombol->item(0)->textContent));
+
+            $href = $tombol->item(0)->getAttribute('href');
+            $this->assertSame(strtok(route($nama), '?'), strtok($href, '?'));
+            parse_str((string) parse_url($href, PHP_URL_QUERY), $parameter);
+            ksort($parameter);
+            $harapan = $query;
+            ksort($harapan);
+            $this->assertSame($harapan, $parameter);
+
+            // Komponen x-ui.button secondary (bukan kelas Breeze), berikon, di actions header.
+            $kelas = $tombol->item(0)->getAttribute('class');
+            $this->assertStringContainsString('rounded-full', $kelas);
+            $this->assertStringContainsString('border-stone-300', $kelas);
+            $this->assertStringNotContainsString('bg-gray-800', $kelas);
+            $this->assertSame(1, $xpath->query('//a[@data-tombol-unduh="'.$jenis.'"]/*[local-name()="svg"]')->length);
+        }
+        $this->assertSame(0, $xpath->query('//*[@data-pratinjau-laporan]//*[@data-tombol-unduh]')->length);
     }
 
     public function test_view_pdf_struktur_sama_dan_kepala_berulang(): void

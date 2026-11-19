@@ -41,6 +41,14 @@
     .tabel .num {
         @apply text-right tabular-nums;
     }
+
+    /*
+     * F5 A: bingkai pratinjau cetak laporan di halaman web (bukan selector laporan; PDF tidak punya pembungkus ini).
+     * Bisa digulir mendatar supaya tabel laporan yang lebar tidak merusak layout.
+     */
+    .laporan-pratinjau {
+        @apply overflow-x-auto px-6 pb-6 pt-3;
+    }
 }
 
 /*

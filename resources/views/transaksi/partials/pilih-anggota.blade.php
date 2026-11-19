@@ -7,8 +7,10 @@
         $daftar  (opsional) koleksi anggota; default $anggotaAktif (form setor/tarik, hanya anggota aktif, BR-05).
         $idAwal  (opsional) id terpilih; default old('anggota_id') yang menang atas ?anggota_id= ($anggotaTerpilih).
         $saldo   (opsional, form tarik) peta { id anggota: saldo sukarela }; tampil rata kanan di tiap opsi.
-        $semua   (opsional, Riwayat) true = mode filter: opsi pertama "Semua anggota" (nilai kosong), tanpa label
-                 terlihat, pemicu bergaya kolom cari, jangkar data-pilih-anggota, dan form induk mengirim saat berubah.
+        $semua   (opsional, tidak dipakai sejak revisi 2 pasca-F4b) true = mode filter: opsi pertama "Semua anggota"
+                 (nilai kosong), tanpa label terlihat, tanpa pesan error, jangkar data-pilih-anggota.
+        $opsiSemua (opsional, F5 H.3 laporan per anggota) true = label "Anggota" dan pesan error anggota_id tetap tampil,
+                 opsi pertama "Semua anggota" (nilai kosong). Memilih tidak mengirim form (laporan memakai tombol Tampilkan).
     - Setelah memilih, elemen ini mengirim event `anggota-dipilih` (detail.id, detail.berubah) yang dibaca
       resources/js/transaksi-tarik.js dan bilah filter Riwayat.
     Jangkar test: data-pilih-anggota-cari, tiap opsi data-opsi-anggota="{id}", teks pemicu data-anggota-terpilih.
@@ -20,12 +22,13 @@
     $daftar ??= $anggotaAktif;
     $saldo ??= null;
     $semua ??= false;
+    $opsiSemua = $semua || ($opsiSemua ?? false);
     $idAwal = (string) ($idAwal ?? old('anggota_id', $anggotaTerpilih ?? null));
     $terpilih = $daftar->first(fn ($anggota) => (string) $anggota->id === $idAwal);
     $salah = ! $semua && $errors->has('anggota_id');
     // Daftar form setor/tarik dimuat tanpa kolom status (sudah disaring aktif di controller), jadi status kosong = aktif.
     $labelOpsi = fn ($anggota) => $anggota->no_anggota.' - '.Format::namaAnggota($anggota->nama, $anggota->status ?? Anggota::STATUS_AKTIF);
-    $kosong = $semua ? 'Semua anggota' : 'Pilih anggota';
+    $kosong = $opsiSemua ? 'Semua anggota' : 'Pilih anggota';
     $labelTerpilih = $terpilih ? $labelOpsi($terpilih) : $kosong;
 @endphp
 
@@ -36,7 +39,7 @@
          id: @js($terpilih ? (string) $terpilih->id : ''),
          label: @js($labelTerpilih),
          kosong: @js($kosong),
-         semua: @js($semua),
+         semua: @js($opsiSemua),
          sorot: '',
          cocok(el) {
              const q = this.cari.trim().toLowerCase();
@@ -132,7 +135,7 @@
                 'no' => $anggota->no_anggota,
                 'saldo' => $saldo !== null ? Format::rupiah($saldo[$anggota->id] ?? 0) : null,
             ]);
-            if ($semua) {
+            if ($opsiSemua) {
                 $opsi->prepend(['id' => '', 'label' => 'Semua anggota', 'nama' => '', 'no' => '', 'saldo' => null]);
             }
         @endphp

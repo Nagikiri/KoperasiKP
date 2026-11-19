@@ -37,6 +37,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/transaksi/tarik', [TransaksiSimpananController::class, 'createTarik'])->name('transaksi.tarik.create');
     Route::post('/transaksi/tarik', [TransaksiSimpananController::class, 'storeTarik'])->name('transaksi.tarik.store');
     Route::get('/transaksi/riwayat', [TransaksiSimpananController::class, 'riwayat'])->name('transaksi.riwayat');
+    // F5 H.5: ekspor Riwayat dengan filter yang sama seperti halaman.
+    Route::get('/transaksi/riwayat/pdf', [TransaksiSimpananController::class, 'pdfRiwayat'])->name('transaksi.riwayat.pdf');
+    Route::get('/transaksi/riwayat/excel', [TransaksiSimpananController::class, 'excelRiwayat'])->name('transaksi.riwayat.excel');
 
     // Laporan: per anggota dan rekap & laporan keseluruhan, plus ekspor (satu sumber data LaporanService).
     Route::get('/laporan/anggota', [LaporanController::class, 'anggota'])->name('laporan.anggota');
