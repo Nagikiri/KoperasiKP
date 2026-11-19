@@ -1,7 +1,6 @@
 @php
     use App\Models\TransaksiSimpanan;
     use App\Support\Format;
-    use Illuminate\Support\Str;
 
     // F4 H.3.4: pilihan bilah filter. Kunci kosong = tanpa filter. Satu peta label; tampilan selalu lewat ?? cadangan.
     $segmen = ['' => 'Semua', TransaksiSimpanan::SETOR => 'Setoran', TransaksiSimpanan::TARIK => 'Penarikan'];
@@ -22,6 +21,22 @@
     $adaFilter = collect($filter)->contains(fn ($nilai) => $nilai !== null);
     $urlReset = route('transaksi.riwayat');
     $kelasOpsi = 'group flex w-full items-center justify-between px-3 py-2 text-left text-sm text-stone-700 hover:bg-stone-50 focus:bg-stone-50 focus:outline-none aria-checked:font-medium aria-checked:text-stone-900';
+
+    // Revisi 2 pasca-F4b: kolom cari gabungan. Opsi teks polos "{no} - {nama}" (+ " (Nonaktif)"), F1 §0.
+    $labelAnggota = fn ($anggota) => $anggota->no_anggota.' - '.Format::namaAnggota($anggota->nama, $anggota->status);
+    $anggotaFilter = $anggotaList->first(fn ($anggota) => (string) $anggota->id === $filter['anggota_id']);
+
+    // Ringkasan: label periode dari peta label waktu dropdown; rentang kustom memakai tanggal yang dipilih.
+    $labelPeriode = $pilihanWaktu[$rentangAktif] ?? 'Semua waktu';
+    if ($rentangAktif === 'kustom') {
+        $labelPeriode = match (true) {
+            $filter['dari'] !== null && $filter['sampai'] !== null => Format::tanggalPendek($filter['dari']).' – '.Format::tanggalPendek($filter['sampai']),
+            $filter['dari'] !== null => 'Sejak '.Format::tanggalPendek($filter['dari']),
+            $filter['sampai'] !== null => 'Sampai '.Format::tanggalPendek($filter['sampai']),
+            default => 'Semua waktu',
+        };
+    }
+    $bersih = round((float) $ringkasan['total_setor'] - (float) $ringkasan['total_tarik'], 2);
 @endphp
 
 <x-app-layout>
@@ -34,7 +49,7 @@
 
     <x-ui.card padding="none" data-kartu-riwayat-transaksi>
         {{--
-            H.3.4: semua pilihan langsung terkirim (cari saat Enter, select anggota saat berubah); "Pilih tanggal…" baru
+            H.3.4: semua pilihan langsung terkirim (cari saat Enter, anggota saat dipilih dari panel kolom cari); "Pilih tanggal…" baru
             terkirim setelah kedua tanggal terisi. Input kosong di-disabled sebelum kirim supaya URL dan tautan paginasi
             bersih, lalu diaktifkan lagi saat halaman dipulihkan dari cache Back/Forward (H.6.5). Form tidak membawa
             `page`, jadi filter baru selalu kembali ke halaman 1.
@@ -56,17 +71,99 @@
               x-on:submit="bersihkan()"
               x-on:pageshow.window="pulihkan()"
               class="space-y-3 border-b border-stone-200 px-6 py-4">
-            <div class="grid gap-2 md:grid-cols-[minmax(0,1fr)_18rem]">
-                <div class="relative">
+            {{--
+                Revisi 2 pasca-F4b: kolom cari gabungan selebar penuh (cari + pilih anggota). Saat difokus/diketik, panel
+                menampilkan "Semua anggota" lalu anggota yang cocok (nama/no. anggota, tanpa beda huruf besar/kecil),
+                gaya sama dengan panel form setor. Memilih anggota: set anggota_id, kosongkan cari, kirim. Enter tanpa
+                opsi tersorot: kirim sebagai cari (perilaku lama) dan anggota_id dihapus. Anggota terpilih tampil di
+                dalam isian dengan tombol hapus. Nama input tetap `cari` dan `anggota_id` (kontrak $filter tetap).
+            --}}
+            <div class="relative" data-pilih-anggota
+                 x-data="{
+                     buka: false,
+                     cari: @js($filter['cari'] ?? ''),
+                     sorot: null,
+                     cocok(el) {
+                         if (el.dataset.opsiAnggota === '') return true;
+                         const q = this.cari.trim().toLowerCase();
+                         return q === '' || el.dataset.kunci.includes(q);
+                     },
+                     terlihat() {
+                         return [...this.$refs.daftar.querySelectorAll('[data-opsi-anggota]')].filter((el) => this.cocok(el));
+                     },
+                     tutup() { this.buka = false; this.sorot = null },
+                     geser(arah) {
+                         this.buka = true;
+                         const daftar = this.terlihat();
+                         const i = daftar.findIndex((el) => el.dataset.opsiAnggota === this.sorot);
+                         const j = i === -1 ? (arah > 0 ? 0 : daftar.length - 1) : Math.min(Math.max(i + arah, 0), daftar.length - 1);
+                         this.sorot = daftar[j].dataset.opsiAnggota;
+                         this.$nextTick(() => this.$refs.daftar.querySelector('[data-opsi-anggota=&quot;' + this.sorot + '&quot;]')?.scrollIntoView({ block: 'nearest' }));
+                     },
+                     kirimForm() { this.$nextTick(() => this.$refs.cari.form.requestSubmit()) },
+                     pilih(el) {
+                         this.$refs.anggota.value = el.dataset.opsiAnggota;
+                         this.cari = '';
+                         this.tutup();
+                         this.kirimForm();
+                     },
+                     enter(event) {
+                         const el = this.buka && this.sorot !== null ? this.terlihat().find((el) => el.dataset.opsiAnggota === this.sorot) : null;
+                         if (el) { event.preventDefault(); this.pilih(el); return; }
+                         this.$refs.anggota.value = '';
+                         this.tutup();
+                     },
+                     hapusAnggota() { this.$refs.anggota.value = ''; this.kirimForm() },
+                 }"
+                 x-on:keydown.escape="if (buka) { $event.preventDefault(); $event.stopPropagation(); tutup() }"
+                 x-on:click.outside="tutup()">
+                <input type="hidden" name="anggota_id" value="{{ $anggotaFilter?->id }}" x-ref="anggota">
+
+                <div class="relative flex h-11 w-full items-center gap-2 rounded-xl border border-stone-300 bg-white pl-11 pr-3.5 text-sm focus-within:border-arang focus-within:ring-2 focus-within:ring-arang/20" data-isian-cari>
                     <x-ui.icon name="magnifying-glass" class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-                    <x-ui.input type="search" name="cari" value="{{ $filter['cari'] }}" placeholder="Cari nama atau no. anggota" aria-label="Cari nama atau no. anggota" :ikon-kiri="true" />
+                    @if ($anggotaFilter)
+                        <span class="inline-flex min-w-0 max-w-[70%] shrink-0 items-center gap-1 rounded-lg bg-stone-100 py-1 pl-2.5 pr-1 text-stone-900">
+                            <span class="truncate" data-anggota-terpilih>{{ $labelAnggota($anggotaFilter) }}</span>
+                            <button type="button" aria-label="Hapus filter anggota" title="Hapus filter anggota" data-hapus-anggota
+                                    x-on:click="hapusAnggota()"
+                                    class="rounded-md p-0.5 text-stone-500 hover:bg-stone-200 hover:text-stone-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-arang/30">
+                                <x-ui.icon name="x-mark" class="h-3.5 w-3.5" />
+                            </button>
+                        </span>
+                    @endif
+                    <input type="search" name="cari" value="{{ $filter['cari'] }}" x-ref="cari" x-model="cari" autocomplete="off"
+                           placeholder="Cari nama atau no. anggota" aria-label="Cari nama atau no. anggota"
+                           role="combobox" aria-autocomplete="list" aria-controls="daftar-anggota-riwayat" aria-expanded="false" x-bind:aria-expanded="buka.toString()"
+                           x-on:focus="buka = true"
+                           x-on:input="buka = true; sorot = null"
+                           x-on:keydown.down.prevent="geser(1)"
+                           x-on:keydown.up.prevent="geser(-1)"
+                           x-on:keydown.enter="enter($event)"
+                           class="h-full min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-0">
                 </div>
-                <x-ui.select name="anggota_id" aria-label="Anggota" x-on:change="kirim()" data-pilih-anggota>
-                    <option value="">Semua anggota</option>
-                    @foreach ($anggotaList as $anggota)
-                        <option value="{{ $anggota->id }}" @selected($filter['anggota_id'] === (string) $anggota->id)>{{ $anggota->no_anggota }} - {{ Format::namaAnggota($anggota->nama, $anggota->status) }}</option>
-                    @endforeach
-                </x-ui.select>
+
+                <div x-cloak x-show="buka" x-transition.opacity.duration.100ms
+                     class="absolute inset-x-0 z-20 mt-2 overflow-hidden rounded-xl border border-stone-200 bg-white shadow-lg">
+                    <ul id="daftar-anggota-riwayat" role="listbox" aria-label="Daftar anggota" x-ref="daftar" class="max-h-72 overflow-y-auto py-1">
+                        @foreach ([null, ...$anggotaList] as $anggota)
+                            @php
+                                $idOpsi = $anggota ? (string) $anggota->id : '';
+                                $teksOpsi = $anggota ? $labelAnggota($anggota) : 'Semua anggota';
+                            @endphp
+                            <li role="option" data-opsi-anggota="{{ $idOpsi }}"
+                                data-kunci="{{ $anggota ? mb_strtolower($anggota->nama.' '.$anggota->no_anggota) : '' }}"
+                                aria-selected="{{ $idOpsi === ($filter['anggota_id'] ?? '') ? 'true' : 'false' }}"
+                                x-show="cocok($el)"
+                                x-on:click="pilih($el)"
+                                x-on:mouseenter="sorot = $el.dataset.opsiAnggota"
+                                x-bind:class="sorot === $el.dataset.opsiAnggota ? 'bg-stone-100' : ''"
+                                class="flex cursor-pointer items-center justify-between gap-3 px-3 py-2 text-sm text-stone-900">
+                                <span class="min-w-0 truncate" data-label-opsi>{{ $teksOpsi }}</span>
+                            </li>
+                        @endforeach
+                    </ul>
+                    <p x-show="terlihat().length <= 1" x-cloak class="px-3 py-3 text-sm text-stone-500" data-anggota-kosong>Tidak ada anggota yang cocok.</p>
+                </div>
             </div>
 
             <div class="flex flex-wrap items-center justify-between gap-2">
@@ -162,13 +259,63 @@
             <button type="submit" class="sr-only">Terapkan Filter</button>
         </form>
 
-        {{-- H.3.6: ringkasan dari total paginator dan satu query agregasi dengan filter yang sama. --}}
-        <div class="border-b border-stone-200 px-6 py-2.5 text-sm text-stone-500" data-ringkasan-riwayat-transaksi>
-            <span class="font-medium text-stone-900 tabular-nums" data-ringkasan-jumlah>{{ $riwayat->total() }} transaksi</span>
+        {{--
+            H.3.6: ringkasan dari total paginator dan satu query agregasi dengan filter yang sama.
+            Revisi 2 pasca-F4b: diawali label periode, diakhiri Bersih = setor − tarik (bertanda ASCII, naik/turun).
+        --}}
+        {{--
+            State geser bersama (Alpine): tombol ‹ › di baris ringkasan, bayangan kolom tempel, dan petunjuk geser di tepi
+            kanan. ada = tabel lebih lebar dari wadahnya; tergeser = tidak di paling kiri; bisaKanan = belum di paling kanan.
+        --}}
+        <div data-area-riwayat
+             x-data="{
+                 ada: false,
+                 tergeser: false,
+                 bisaKanan: false,
+                 ukur() {
+                     const el = this.$refs.gulir;
+                     if (! el) { this.ada = this.tergeser = this.bisaKanan = false; return; }
+                     this.ada = el.scrollWidth > el.clientWidth + 1;
+                     this.tergeser = el.scrollLeft > 0;
+                     this.bisaKanan = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+                 },
+                 geser(arah) { this.$refs.gulir?.scrollBy({ left: arah * 320, behavior: 'smooth' }) },
+             }"
+             x-init="$nextTick(() => ukur())"
+             x-on:resize.window="ukur()"
+             x-bind:data-tergeser="tergeser">
+        <div class="flex items-center justify-between gap-3 border-b border-stone-200 px-6 py-2.5">
+        <p class="text-sm text-stone-500" data-ringkasan-riwayat-transaksi>
+            <span class="text-stone-700" data-ringkasan-periode>{{ $labelPeriode }}</span>
+            <span class="mx-1.5 text-stone-300" aria-hidden="true">·</span>
+            <span class="font-medium text-stone-900 tabular-nums" data-ringkasan-jumlah>{{ number_format($riwayat->total(), 0, ',', '.') }} transaksi</span>
             <span class="mx-1.5 text-stone-300" aria-hidden="true">·</span>
             Setor <span class="font-medium text-setor tabular-nums" data-ringkasan-setor>{{ Format::rupiah($ringkasan['total_setor']) }}</span>
             <span class="mx-1.5 text-stone-300" aria-hidden="true">·</span>
             Tarik <span class="font-medium text-tarik tabular-nums" data-ringkasan-tarik>{{ Format::rupiah($ringkasan['total_tarik']) }}</span>
+            <span class="mx-1.5 text-stone-300" aria-hidden="true">·</span>
+            Bersih <span @class([
+                'font-medium tabular-nums',
+                'text-naik' => $bersih > 0,
+                'text-turun' => $bersih < 0,
+                'text-stone-900' => $bersih == 0,
+            ]) data-ringkasan-bersih><span class="normal-nums">{{ $bersih > 0 ? '+' : ($bersih < 0 ? '-' : '') }}</span>{{ Format::rupiah(abs($bersih)) }}</span>
+        </p>
+        @if ($riwayat->isNotEmpty())
+            {{-- Tombol geser: hanya saat tabel lebih lebar dari wadahnya; nonaktif di ujung masing-masing. --}}
+            <div class="flex shrink-0 items-center gap-1" x-cloak x-show="ada">
+                <x-ui.button variant="ghost" size="sm" square type="button" data-geser-tabel="kiri"
+                             aria-label="Geser tabel ke kiri" title="Geser tabel ke kiri (Shift + gulir mouse juga bisa)"
+                             x-on:click="geser(-1)" x-bind:disabled="! tergeser">
+                    <x-ui.icon name="chevron-left" class="h-4 w-4 text-stone-500" />
+                </x-ui.button>
+                <x-ui.button variant="ghost" size="sm" square type="button" data-geser-tabel="kanan"
+                             aria-label="Geser tabel ke kanan" title="Geser tabel ke kanan (Shift + gulir mouse juga bisa)"
+                             x-on:click="geser(1)" x-bind:disabled="! bisaKanan">
+                    <x-ui.icon name="chevron-right" class="h-4 w-4 text-stone-500" />
+                </x-ui.button>
+            </div>
+        @endif
         </div>
 
         @if ($riwayat->isEmpty())
@@ -180,38 +327,72 @@
                 <x-ui.empty icon="banknotes" title="Belum ada transaksi." />
             @endif
         @else
-            {{-- H.3.7 / H.6.3–H.6.4: tanpa avatar dan tanpa kolom jenis simpanan terpisah; semua sel rata kiri. --}}
-            <div class="overflow-x-auto">
-                <table class="tabel">
-                    <thead>
-                        <tr>
-                            <th>Tanggal</th>
-                            <th>Anggota</th>
-                            <th>Transaksi</th>
-                            <th class="num">Jumlah</th>
-                            <th class="num" title="Saldo jenis simpanan ini setelah transaksi">Saldo jenis ini</th>
-                            <th>Dicatat oleh</th>
-                            <th>Catatan</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach ($riwayat as $transaksi)
-                            @php $setor = $transaksi->jenis_transaksi === TransaksiSimpanan::SETOR; @endphp
-                            <tr data-transaksi="{{ $setor ? 'setor' : 'tarik' }}" data-id-transaksi="{{ $transaksi->id }}">
-                                <td class="whitespace-nowrap">{{ Format::tanggal($transaksi->tanggal_transaksi) }}</td>
-                                <td>
-                                    <div class="text-stone-900"><x-nama-anggota :nama="$transaksi->anggota->nama" :status="$transaksi->anggota->status" /></div>
-                                    <div class="font-mono text-xs text-stone-500">{{ $transaksi->anggota->no_anggota }}</div>
-                                </td>
-                                <td><x-ui.jenis-transaksi :jenis="$transaksi->jenis_transaksi" :nama-jenis="$transaksi->jenisSimpanan->nama_jenis" /></td>
-                                <td class="num whitespace-nowrap font-medium {{ $setor ? 'text-setor' : 'text-tarik' }}" data-nominal>{{ $setor ? '+' : '-' }}{{ Format::rupiah($transaksi->jumlah) }}</td>
-                                <td class="num whitespace-nowrap" data-saldo-jenis-ini>{{ Format::rupiah($transaksi->saldo_akhir) }}</td>
-                                <td>{{ $transaksi->staff->nama }}</td>
-                                <td class="text-stone-500" data-sel-catatan>@if (filled($transaksi->keterangan))<span title="{{ $transaksi->keterangan }}" data-catatan>{{ Str::limit($transaksi->keterangan, 40) }}</span>@endif</td>
+            {{--
+                Revisi 2 pasca-F4b: lebar kolom mengikuti isi (tanpa table-fixed/colgroup); semua sel satu baris dan
+                tampil penuh, kecuali Catatan (maks. 2 baris). Tabel min-w-full w-max bergulir mendatar di dalam kartu.
+                Kolom Anggota menempel di kiri (sticky) dengan latar sama dengan baris; saat tabel tergeser, kolom itu
+                diberi bayangan tipis di kanan. Bayangan di tepi kanan wadah menandakan tabel masih bisa digeser.
+                Header tidak menempel. Kolom uang (.num) rata kanan, kolom lain rata kiri (E).
+            --}}
+            <div class="relative" data-gulir-riwayat>
+                <div class="overflow-x-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-arang/30"
+                     tabindex="0" aria-label="Tabel riwayat transaksi, bisa digeser"
+                     x-ref="gulir" x-on:scroll.passive="ukur()">
+                    {{-- border-separate: garis tiap sel ikut bergeser bersama kolom yang menempel (collapse tidak). --}}
+                    <table class="tabel w-max min-w-full border-separate border-spacing-0">
+                        <thead>
+                            <tr>
+                                <th class="sticky left-0 z-10 whitespace-nowrap bg-stone-50 [[data-tergeser]_&]:shadow-[6px_0_8px_-6px_rgba(28,25,23,0.18)]" data-kolom-tempel>Anggota</th>
+                                <th class="whitespace-nowrap">Tanggal</th>
+                                <th class="whitespace-nowrap">Transaksi</th>
+                                <th class="num whitespace-nowrap">Jumlah</th>
+                                <th class="num whitespace-nowrap" title="Saldo jenis simpanan ini setelah transaksi tersebut">Saldo setelah transaksi</th>
+                                <th class="whitespace-nowrap">Dicatat oleh</th>
+                                <th class="min-w-[16rem]">Catatan</th>
                             </tr>
-                        @endforeach
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            @foreach ($riwayat as $transaksi)
+                                @php
+                                    $setor = $transaksi->jenis_transaksi === TransaksiSimpanan::SETOR;
+                                    $aktif = $transaksi->anggota->isAktif();
+                                @endphp
+                                <tr class="group" data-transaksi="{{ $setor ? 'setor' : 'tarik' }}" data-id-transaksi="{{ $transaksi->id }}">
+                                    <td class="sticky left-0 z-10 whitespace-nowrap bg-white group-hover:bg-stone-50 [[data-tergeser]_&]:shadow-[6px_0_8px_-6px_rgba(28,25,23,0.18)]" data-kolom-tempel>
+                                        {{-- Avatar sm + nama bertaut (garis bawah hanya saat hover) + baris no. anggota; nonaktif: "· ● Nonaktif" tanpa pil. --}}
+                                        <div class="flex items-center gap-3">
+                                            <x-ui.avatar-initial :nama="$transaksi->anggota->nama" size="sm" />
+                                            <div>
+                                                <a href="{{ route('anggota.show', $transaksi->anggota) }}" data-tautan-detail
+                                                   class="rounded-sm font-medium text-stone-900 underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-arang/30">{{ $transaksi->anggota->nama }}</a>
+                                                <div class="flex items-center gap-1.5 text-xs text-stone-500" data-baris-no-anggota>
+                                                    <span class="font-mono">{{ $transaksi->anggota->no_anggota }}</span>
+                                                    @unless ($aktif)
+                                                        <span aria-hidden="true">·</span>
+                                                        <span class="inline-flex items-center gap-1 text-stone-600" data-penanda-nonaktif><span aria-hidden="true" class="h-1.5 w-1.5 shrink-0 rounded-full bg-red-600"></span>Nonaktif</span>
+                                                    @endunless
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="whitespace-nowrap" data-sel-tanggal>{{ Format::tanggal($transaksi->tanggal_transaksi) }}</td>
+                                    <td class="whitespace-nowrap">
+                                        {{-- Pil bergaris tepi bergaya badge status anggota: titik setor/tarik, label, lalu jenis tanpa awalan "Simpanan ". --}}
+                                        <span class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-stone-300 bg-white px-2 py-0.5 text-[13px] leading-5 text-stone-800" data-pil-transaksi="{{ $setor ? 'setor' : 'tarik' }}"><span aria-hidden="true" class="h-1.5 w-1.5 shrink-0 rounded-full {{ $setor ? 'bg-setor' : 'bg-tarik' }}"></span><span class="font-medium">{{ $setor ? 'Setor' : 'Tarik' }}</span><span class="text-stone-500" data-pil-jenis>· {{ str_replace('Simpanan ', '', $transaksi->jenisSimpanan->nama_jenis) }}</span></span>
+                                    </td>
+                                    {{-- Tanda ASCII tanpa angka tabular supaya "-Rp" serapat "+Rp". --}}
+                                    <td class="num whitespace-nowrap font-medium {{ $setor ? 'text-setor' : 'text-tarik' }}" data-nominal><span class="normal-nums">{{ $setor ? '+' : '-' }}</span>{{ Format::rupiah($transaksi->jumlah) }}</td>
+                                    <td class="num whitespace-nowrap" data-saldo-jenis-ini>{{ Format::rupiah($transaksi->saldo_akhir) }}</td>
+                                    <td class="whitespace-nowrap" data-sel-staf>{{ $transaksi->staff->nama }}</td>
+                                    <td class="min-w-[16rem] whitespace-normal text-stone-500" data-sel-catatan>@if (filled($transaksi->keterangan))<span class="line-clamp-2 max-w-[22rem] break-words" title="{{ $transaksi->keterangan }}" data-catatan>{{ $transaksi->keterangan }}</span>@endif</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                {{-- Petunjuk geser: bayangan tipis di tepi kanan selama tabel masih bisa digeser ke kanan. --}}
+                <div x-cloak x-show="bisaKanan" x-transition.opacity aria-hidden="true" data-petunjuk-geser
+                     class="pointer-events-none absolute inset-y-0 right-0 z-20 w-4 shadow-[inset_-10px_0_8px_-8px_rgba(28,25,23,0.18)]"></div>
             </div>
 
             @if ($riwayat->hasPages())
@@ -220,5 +401,6 @@
                 </div>
             @endif
         @endif
+        </div>
     </x-ui.card>
 </x-app-layout>

@@ -17,6 +17,15 @@ class FormatTest extends TestCase
         $this->assertSame('Minggu, 15 November 2026', Format::hariTanggal('2026-11-15'));
     }
 
+    public function test_tanggal_pendek_memakai_singkatan_bulan_bahasa_indonesia(): void
+    {
+        // Dipakai label periode kustom di ringkasan Riwayat (tabel Riwayat kembali memakai tanggal()).
+        $this->assertSame('17 Nov 2026', Format::tanggalPendek('2026-11-17'));
+        $this->assertSame('5 Agt 2026', Format::tanggalPendek('2026-08-05'));
+        $this->assertSame('1 Mei 2026', Format::tanggalPendek('2026-05-01 00:00:00'));
+        $this->assertSame('-', Format::tanggalPendek(null));
+    }
+
     public function test_hari_tanggal_null_menjadi_strip(): void
     {
         $this->assertSame('-', Format::hariTanggal(null));

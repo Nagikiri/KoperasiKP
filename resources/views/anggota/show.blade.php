@@ -236,7 +236,7 @@
                                 <th>Tanggal</th>
                                 <th>Transaksi</th>
                                 <th class="num">Jumlah</th>
-                                <th class="num" title="Saldo jenis simpanan ini setelah transaksi">Saldo jenis ini</th>
+                                <th class="num" title="Saldo jenis simpanan ini setelah transaksi tersebut">Saldo setelah transaksi</th>
                                 <th>Dicatat oleh</th>
                                 <th>Catatan</th>
                             </tr>

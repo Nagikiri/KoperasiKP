@@ -4,7 +4,7 @@
 
 @layer components {
     /*
-     * Tabel seragam (F1 §3.7, F3b A): pakai <table class="tabel">, sel angka diberi kelas .num (tabular-nums, rata kiri).
+     * Tabel seragam (F1 §3.7, F3b A): pakai <table class="tabel">, kolom uang diberi kelas .num (tabular-nums, rata kanan, F4b E).
      * Baris rapat, garis antar kolom dan antar baris stone-200, sel tepi pl-6/pr-6 sejajar kepala kartu.
      */
     .tabel {
@@ -37,9 +37,9 @@
         @apply bg-stone-50;
     }
 
-    /* Revisi pasca-F3b: semua judul dan sel .tabel rata kiri, termasuk angka; .num hanya memberi tabular-nums. */
+    /* F4b E: kolom uang (.num, di <th> maupun <td>) rata kanan dengan tabular-nums; kolom lain rata kiri. */
     .tabel .num {
-        @apply tabular-nums;
+        @apply text-right tabular-nums;
     }
 }
 

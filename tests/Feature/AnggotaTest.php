@@ -831,9 +831,9 @@ class AnggotaTest extends TestCase
         $this->assertSame(\Illuminate\Support\Str::limit($catatan, 40), trim($sel->textContent));
 
         $kepala = array_map(fn ($th) => trim($th->textContent), iterator_to_array($xpath->query('//*[@data-kartu-riwayat]//thead//th')));
-        // F3b D.4: "Saldo akhir" diganti "Saldo jenis ini" (ber-title penjelas).
-        $this->assertSame(['Tanggal', 'Transaksi', 'Jumlah', 'Saldo jenis ini', 'Dicatat oleh', 'Catatan'], $kepala);
-        $this->assertSame(1, $xpath->query('//*[@data-kartu-riwayat]//th[@title="Saldo jenis simpanan ini setelah transaksi"]')->length);
+        // F3b D.4: "Saldo akhir" diganti "Saldo jenis ini"; F4b F: menjadi "Saldo setelah transaksi" (ber-title penjelas).
+        $this->assertSame(['Tanggal', 'Transaksi', 'Jumlah', 'Saldo setelah transaksi', 'Dicatat oleh', 'Catatan'], $kepala);
+        $this->assertSame(1, $xpath->query('//*[@data-kartu-riwayat]//th[@title="Saldo jenis simpanan ini setelah transaksi tersebut"]')->length);
     }
 
     public function test_detail_riwayat_memakai_pagination_indonesia(): void
@@ -943,23 +943,45 @@ class AnggotaTest extends TestCase
         $this->assertSame('–', trim($xpath->query('//*[@data-baris-identitas="no_telepon"]/dd')->item(0)->textContent));
     }
 
-    public function test_tabel_anggota_rata_kiri_tanpa_text_right_atau_center(): void
+    public function test_tabel_kolom_uang_rata_kanan_dan_kolom_lain_rata_kiri(): void
     {
         $anggota = Anggota::factory()->create();
         $this->buatTransaksi($anggota, '2026-03-01');
 
-        // F4 H.5.1: Riwayat transaksi ikut aturan rata kiri.
-        foreach ([route('anggota.index'), route('anggota.show', $anggota), route('transaksi.riwayat')] as $url) {
+        // F4b E: kolom uang memakai .num (judul DAN isi); kolom lain tanpa .num; tidak ada text-center/text-right langsung.
+        $kasus = [
+            route('anggota.index') => [['Total simpanan'], ['data-total-simpanan']],
+            route('anggota.show', $anggota) => [['Jumlah', 'Saldo setelah transaksi'], ['data-nominal', 'data-saldo-jenis-ini']],
+            route('transaksi.riwayat') => [['Jumlah', 'Saldo setelah transaksi'], ['data-nominal', 'data-saldo-jenis-ini']],
+        ];
+
+        foreach ($kasus as $url => [$judulUang, $selUang]) {
             $xpath = $this->xpath($this->actingAs($this->admin)->get($url)->getContent());
-            $this->assertGreaterThan(0, $xpath->query('//table[contains(@class, "tabel")]//th')->length, $url);
-            $this->assertSame(0, $xpath->query('//table[contains(@class, "tabel")]//th[contains(@class, "text-right") or contains(@class, "text-center")]')->length, $url);
-            $this->assertSame(0, $xpath->query('//table[contains(@class, "tabel")]//td[contains(@class, "text-right") or contains(@class, "text-center")]')->length, $url);
+            $tabel = '//table[contains(@class, "tabel")]';
+            $num = '[contains(concat(" ", normalize-space(@class), " "), " num ")]';
+
+            $judulNum = array_map(fn ($th) => trim($th->textContent), iterator_to_array($xpath->query($tabel.'//th'.$num)));
+            $this->assertSame($judulUang, $judulNum, $url);
+            $this->assertGreaterThan(count($judulUang), $xpath->query($tabel.'//th')->length, $url);
+
+            foreach ($selUang as $jangkar) {
+                $sel = $xpath->query($tabel.'//td[@'.$jangkar.']');
+                $this->assertGreaterThan(0, $sel->length, "{$url} {$jangkar}");
+                $this->assertSame($sel->length, $xpath->query($tabel.'//td[@'.$jangkar.']'.$num)->length, "{$url} {$jangkar}");
+            }
+
+            // Hanya sel uang yang bernilai .num; kolom lain rata kiri.
+            $selNum = $xpath->query($tabel.'//td'.$num);
+            foreach ($selNum as $td) {
+                $this->assertTrue(collect($selUang)->contains(fn ($jangkar) => $td->hasAttribute($jangkar)), "{$url}: .num di luar kolom uang.");
+            }
+            $this->assertSame(0, $xpath->query($tabel.'//*[self::th or self::td][contains(@class, "text-right") or contains(@class, "text-center")]')->length, $url);
         }
 
-        // .num hanya tabular-nums, tanpa text-right.
+        // .num = rata kanan + tabular-nums, berlaku untuk th dan td.
         $this->assertSame(1, preg_match('/\.tabel \.num \{\s*([^}]*)\}/', file_get_contents(resource_path('css/app.css')), $num));
+        $this->assertStringContainsString('text-right', $num[1]);
         $this->assertStringContainsString('tabular-nums', $num[1]);
-        $this->assertStringNotContainsString('text-right', $num[1]);
     }
 
     public function test_detail_filter_jenis_transaksi_dan_jenis_simpanan(): void

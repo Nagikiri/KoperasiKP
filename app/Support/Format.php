@@ -23,6 +23,18 @@ class Format
     }
 
     /**
+     * Tanggal pendek, contoh: `17 Nov 2026` (label periode kustom di ringkasan Riwayat; tabel memakai tanggal()).
+     */
+    public static function tanggalPendek($tanggal): string
+    {
+        if ($tanggal === null) {
+            return '-';
+        }
+
+        return Carbon::parse($tanggal)->translatedFormat('j M Y');
+    }
+
+    /**
      * Contoh: `Senin, 16 November 2026` (topbar, F1 §4.2).
      */
     public static function hariTanggal($tanggal): string

@@ -73,8 +73,20 @@ class TampilanAnggotaNonaktifTest extends TestCase
     {
         $html = $this->html(route('transaksi.riwayat'));
 
-        $this->assertMatchesRegularExpression('/Andi Pratama Wijaya '.self::PENANDA.'/', $html);
-        $this->assertStringContainsString("{$this->andi->no_anggota} - Andi Pratama Wijaya (Nonaktif)", $html);
+        // Revisi 2 pasca-F4b: di tabel Riwayat penanda nonaktif berada di baris nomor anggota ("KSP-… · ● Nonaktif",
+        // titik red-600, teks stone-600, tanpa pil); tidak ada badge x-status-anggota maupun x-nama-anggota di tabel.
+        $this->assertSame(1, preg_match('/<tbody>.*?<\/tbody>/s', $html, $tbody));
+        $this->assertMatchesRegularExpression(
+            '/'.preg_quote($this->andi->no_anggota, '/').'<\/span>\s*<span aria-hidden="true">·<\/span>\s*<span[^>]*text-stone-600[^>]*data-penanda-nonaktif><span[^>]*bg-red-600[^>]*><\/span>Nonaktif<\/span>/',
+            $tbody[0]
+        );
+        $this->assertDoesNotMatchRegularExpression('/'.self::STATUS_MERAH.'/', $tbody[0]);
+        $this->assertDoesNotMatchRegularExpression('/'.self::PENANDA.'/', $tbody[0]);
+        // Kolom cari gabungan (revisi 2 pasca-F4b): opsi teks polos "{no} - {nama} (Nonaktif)".
+        $this->assertMatchesRegularExpression(
+            '/<li[^>]*data-opsi-anggota="'.$this->andi->id.'"[^>]*>\s*<span[^>]*data-label-opsi>'.preg_quote("{$this->andi->no_anggota} - Andi Pratama Wijaya (Nonaktif)", '/').'<\/span>/',
+            $html
+        );
     }
 
     public function test_dashboard_transaksi_terbaru_menandai_nonaktif(): void
