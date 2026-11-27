@@ -10,6 +10,15 @@
         'kontak' => ['judul' => 'Kontak', 'ikon' => 'information-circle'],
         'keanggotaan' => ['judul' => 'Keanggotaan', 'ikon' => 'calendar'],
     ];
+
+    // R1b A2: Batal kembali ke halaman asal (url()->previous()) hanya jika alamatnya di aplikasi ini, bukan akar "/"
+    // (nilai bawaan previous() saat asal tidak diketahui), dan bukan halaman form ini sendiri. Selain itu cadangan:
+    // detail anggota (ubah) atau Data Anggota (tambah).
+    $akar = rtrim(url('/'), '/');
+    $asal = url()->previous();
+    $asalAplikasi = str_starts_with($asal, $akar.'/') && rtrim(strtok($asal, '?#'), '/') !== $akar;
+    $halamanIni = rtrim(strtok($asal, '?#'), '/') === rtrim(url()->current(), '/');
+    $urlBatal = $asalAplikasi && ! $halamanIni ? $asal : ($ubah ? route('anggota.show', $anggota) : route('anggota.index'));
 @endphp
 
 <div class="space-y-6">
@@ -72,7 +81,7 @@
     @endforeach
 
     <div class="flex justify-end gap-2">
-        <x-ui.button variant="secondary" :href="$ubah ? route('anggota.show', $anggota) : route('anggota.index')">Batal</x-ui.button>
+        <x-ui.button variant="secondary" :href="$urlBatal" data-tombol-batal>Batal</x-ui.button>
         <x-ui.button>{{ $ubah ? 'Simpan perubahan' : 'Simpan anggota' }}</x-ui.button>
     </div>
 </div>

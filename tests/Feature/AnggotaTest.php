@@ -634,6 +634,146 @@ class AnggotaTest extends TestCase
     }
 
     // ---------------------------------------------------------------
+    // R1b A, A2, B — penanda tidak dobel, Batal ke halaman asal, modal
+    // ---------------------------------------------------------------
+
+    public function test_daftar_anggota_tanpa_penanda_nonaktif_di_baris_nomor_tetapi_baris_tetap_redup(): void
+    {
+        $nonaktif = Anggota::factory()->nonaktif()->create(['nama' => 'Andi Wijaya']);
+
+        $xpath = $this->xpath($this->actingAs($this->admin)->get(route('anggota.index'))->getContent());
+        $baris = $xpath->query('//tr[@data-baris-anggota="'.$nonaktif->id.'"]')->item(0);
+
+        $this->assertSame(0, $xpath->query('.//*[@data-penanda-nonaktif]', $baris)->length);
+        $this->assertSame($nonaktif->no_anggota, trim($xpath->query('.//*[@data-baris-no-anggota]', $baris)->item(0)->textContent));
+        $this->assertTrue($baris->hasAttribute('data-baris-nonaktif'));
+        $this->assertStringContainsString('text-stone-400', $baris->getAttribute('class'));
+        // Kolom Status tetap menandai Nonaktif.
+        $this->assertSame(1, $xpath->query('.//*[@data-status-anggota="nonaktif"]', $baris)->length);
+    }
+
+    public function test_batal_di_form_ubah_kembali_ke_halaman_asal_atau_detail(): void
+    {
+        $anggota = Anggota::factory()->create();
+        $batal = fn ($respons) => $this->xpath($respons->getContent())->query('//a[@data-tombol-batal]')->item(0)->getAttribute('href');
+
+        // Dari Data Anggota (halaman 2 + pencarian): kembali persis ke sana.
+        $daftar = route('anggota.index', ['search' => 'Budi', 'page' => 2]);
+        $this->assertSame($daftar, $batal($this->actingAs($this->admin)->from($daftar)->get(route('anggota.edit', $anggota))));
+
+        // Dari detail anggota: kembali ke detail.
+        $detail = route('anggota.show', $anggota);
+        $this->assertSame($detail, $batal($this->actingAs($this->admin)->from($detail)->get(route('anggota.edit', $anggota))));
+
+        // Cadangan = detail: asal di luar aplikasi, halaman ubah itu sendiri (mis. setelah error validasi), atau akar "/".
+        foreach (['https://contoh-luar.test/anggota', route('anggota.edit', $anggota), url('/')] as $asal) {
+            $this->assertSame($detail, $batal($this->actingAs($this->admin)->from($asal)->get(route('anggota.edit', $anggota))), $asal);
+        }
+    }
+
+    public function test_batal_di_form_tambah_kembali_ke_halaman_asal_atau_data_anggota(): void
+    {
+        $anggota = Anggota::factory()->create();
+        $batal = fn ($respons) => $this->xpath($respons->getContent())->query('//a[@data-tombol-batal]')->item(0)->getAttribute('href');
+
+        $daftar = route('anggota.index', ['search' => 'Siti']);
+        $this->assertSame($daftar, $batal($this->actingAs($this->admin)->from($daftar)->get(route('anggota.create'))));
+
+        $detail = route('anggota.show', $anggota);
+        $this->assertSame($detail, $batal($this->actingAs($this->admin)->from($detail)->get(route('anggota.create'))));
+
+        foreach (['https://contoh-luar.test/anggota', route('anggota.create'), url('/')] as $asal) {
+            $this->assertSame(route('anggota.index'), $batal($this->actingAs($this->admin)->from($asal)->get(route('anggota.create'))), $asal);
+        }
+    }
+
+    public function test_modal_tersembunyi_saat_dimuat_dan_di_luar_tabel_dengan_struktur_utuh(): void
+    {
+        $anggota = Anggota::factory()->count(16)->sequence(fn ($s) => ['nama' => sprintf('Anggota %02d', $s->index + 1)])->create();
+
+        $halaman = [
+            route('anggota.index') => '//*[@data-modal-nonaktifkan]',
+            route('anggota.show', $anggota->first()) => '//*[@data-modal-nonaktifkan]',
+            route('transaksi.tarik.create') => '//*[@data-konfirmasi-tarik]',
+        ];
+
+        foreach ($halaman as $url => $jalur) {
+            $html = $this->actingAs($this->admin)->get($url)->assertOk()->getContent();
+
+            // Struktur HTML utuh: tidak ada tag yang tidak tertutup atau salah tutup. Diabaikan: tag SVG yang tak dikenal
+            // libxml (801) dan "&" tanpa ";" di URL font bunny (sah di HTML5, bukan masalah struktur).
+            $sebelumnya = libxml_use_internal_errors(true);
+            libxml_clear_errors();
+            $dom = new \DOMDocument;
+            $dom->loadHTML('<?xml encoding="UTF-8">'.$html);
+            $galat = array_values(array_filter(libxml_get_errors(), fn ($e) => $e->code !== 801 && ! str_starts_with($e->message, 'htmlParseEntityRef')));
+            libxml_clear_errors();
+            libxml_use_internal_errors($sebelumnya);
+            $this->assertSame([], array_map(fn ($e) => trim($e->message).' (baris '.$e->line.')', $galat), $url);
+
+            $xpath = new \DOMXPath($dom);
+            $modal = $xpath->query($jalur);
+            $this->assertGreaterThan(0, $modal->length, $url);
+            foreach ($modal as $el) {
+                // Tersembunyi saat dimuat dan melayang (fixed), di luar tabel mana pun.
+                $this->assertStringContainsString('display: none', $el->getAttribute('style'), $url);
+                $this->assertContains('fixed', explode(' ', $el->getAttribute('class')), $url);
+                $this->assertContains('inset-0', explode(' ', $el->getAttribute('class')), $url);
+                $this->assertSame('show', $el->getAttribute('x-show'), $url);
+                $this->assertSame(0, $xpath->query('ancestor::table', $el)->length, $url);
+                // Panel rounded-lg tanpa bayangan (R1).
+                $panel = $xpath->query('./div[contains(@class, "rounded-lg")]', $el)->item(0);
+                $this->assertNotNull($panel, $url);
+                $this->assertStringNotContainsString('shadow', $panel->getAttribute('class'), $url);
+                // Bisa ditutup dengan Esc dan klik latar.
+                $this->assertSame('show = false', $el->getAttribute('x-on:keydown.escape.window'), $url);
+                $this->assertSame('show = false', $xpath->query('./div[contains(@class, "fixed")]', $el)->item(0)->getAttribute('x-on:click'), $url);
+            }
+        }
+
+        // Paginasi tetap tampil di kaki kartu Data Anggota (> 15 anggota), di luar tabel.
+        $xpath = $this->xpath($this->actingAs($this->admin)->get(route('anggota.index'))->getContent());
+        $nav = $xpath->query('//nav[@data-pagination]');
+        $this->assertSame(1, $nav->length);
+        $this->assertStringContainsString('Menampilkan 1–15 dari 16', $nav->item(0)->textContent);
+        $this->assertSame(0, $xpath->query('ancestor::table', $nav->item(0))->length);
+    }
+
+    public function test_tombol_pemicu_berada_di_komponen_alpine_dan_mengirim_nama_modal_yang_dirender(): void
+    {
+        $anggota = Anggota::factory()->count(3)->create();
+
+        foreach ([route('anggota.index'), route('anggota.show', $anggota->first())] as $url) {
+            $xpath = $this->xpath($this->actingAs($this->admin)->get($url)->getContent());
+
+            $namaModal = [];
+            foreach ($xpath->query('//*[@data-modal-nonaktifkan]') as $modal) {
+                $this->assertSame(1, preg_match("/^\\\$event\\.detail == '([^']+)' \\? show = true : null$/", $modal->getAttribute('x-on:open-modal.window'), $m), $url);
+                $namaModal[] = $m[1];
+            }
+
+            $namaPemicu = [];
+            foreach ($xpath->query('//button[@data-aksi-nonaktifkan]') as $tombol) {
+                // Pemicu wajib berada di dalam komponen Alpine (x-data pada dirinya atau leluhurnya); tanpa itu x-on:click mati.
+                $this->assertSame(1, $xpath->query('ancestor-or-self::*[@x-data]', $tombol)->length, $url);
+                $this->assertSame(1, preg_match("/^\\\$dispatch\\('open-modal', '([^']+)'\\)$/", $tombol->getAttribute('x-on:click'), $m), $url);
+                $namaPemicu[] = $m[1];
+            }
+
+            $this->assertNotEmpty($namaPemicu, $url);
+            sort($namaModal);
+            sort($namaPemicu);
+            $this->assertSame($namaModal, $namaPemicu, $url);
+        }
+
+        // Form tarik: modal "Periksa penarikan" dibuka dari transaksi-tarik.js lewat window.dispatchEvent dengan nama yang sama.
+        $xpath = $this->xpath($this->actingAs($this->admin)->get(route('transaksi.tarik.create'))->getContent());
+        $this->assertSame("\$event.detail == 'konfirmasi-tarik' ? show = true : null", $xpath->query('//*[@data-konfirmasi-tarik]')->item(0)->getAttribute('x-on:open-modal.window'));
+        $js = file_get_contents(resource_path('js/transaksi-tarik.js'));
+        $this->assertStringContainsString("window.dispatchEvent(new CustomEvent('open-modal', { detail: 'konfirmasi-tarik' }))", $js);
+    }
+
+    // ---------------------------------------------------------------
     // F3b B — daftar anggota rapi
     // ---------------------------------------------------------------
 

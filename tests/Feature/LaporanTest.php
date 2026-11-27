@@ -160,8 +160,8 @@ class LaporanTest extends TestCase
 
         $kosong = $xpath->query('//*[@data-laporan-kosong]')->item(0);
         $this->assertNotNull($kosong);
-        $this->assertStringContainsString('Pilih anggota dan periode', $kosong->textContent);
-        $this->assertStringContainsString('Kosongkan anggota untuk membuat laporan semua anggota.', $kosong->textContent);
+        // R1b C.7: teks keadaan kosong baru, satu kalimat tanpa deskripsi.
+        $this->assertSame('Pilih semua atau satu anggota, lalu periodenya.', trim($kosong->textContent));
         $this->assertSame(0, $xpath->query('//*[@data-tombol-unduh]')->length);
         $this->assertSame(0, $xpath->query('//*[@data-pratinjau-laporan]')->length);
         $this->assertSame(0, $xpath->query('//a[@data-reset-laporan]')->length);
@@ -182,20 +182,19 @@ class LaporanTest extends TestCase
         $xpath = $this->xpath($this->actingAs($this->admin)->get(route('laporan.anggota'))->getContent());
         $pemilih = '//form[@action="'.route('laporan.anggota').'"]//*[@data-pilih-anggota-cari]';
 
-        // Label terlihat, opsi pertama "Semua anggota" (nilai kosong), lalu semua anggota urut nama termasuk nonaktif.
+        // Label terlihat, semua anggota urut nama termasuk nonaktif. R1b C.2: tanpa opsi "Semua anggota" (diwakili tab mode).
         $this->assertSame('Anggota', trim($xpath->query($pemilih.'//label')->item(0)->textContent));
         $opsi = [];
         foreach ($xpath->query($pemilih.'//*[@data-opsi-anggota]') as $li) {
             $opsi[$li->getAttribute('data-opsi-anggota')] = trim($xpath->query('.//*[@data-label-opsi]', $li)->item(0)->textContent);
         }
         $this->assertSame([
-            '' => 'Semua anggota',
             (string) $this->andi->id => "{$this->andi->no_anggota} - Andi (Nonaktif)",
             (string) $this->budi->id => "{$this->budi->no_anggota} - Budi",
             (string) $this->siti->id => "{$this->siti->no_anggota} - Siti",
         ], $opsi);
         $this->assertSame('', $xpath->query($pemilih.'//input[@type="hidden"][@name="anggota_id"]')->item(0)->getAttribute('value'));
-        $this->assertSame('Semua anggota', trim($xpath->query($pemilih.'//*[@data-anggota-terpilih]')->item(0)->textContent));
+        $this->assertSame('Pilih anggota', trim($xpath->query($pemilih.'//*[@data-anggota-terpilih]')->item(0)->textContent));
         // Tidak ada <select name="anggota_id"> lama.
         $this->assertSame(0, $xpath->query('//select[@name="anggota_id"]')->length);
 
@@ -207,17 +206,20 @@ class LaporanTest extends TestCase
 
     public function test_status_anggota_disabled_saat_anggota_terpilih_dan_error_anggota_tampil_di_bawah_pemicu(): void
     {
+        // R1b C.1: select status diganti tab radio di dalam fieldset data-status-laporan; fieldset disabled (server +
+        // x-bind mengikuti mode) sehingga status_anggota tidak terkirim saat Satu anggota.
         $status = fn (array $query) => $this->xpath($this->actingAs($this->admin)->get(route('laporan.anggota', $query))->getContent())
-            ->query('//select[@name="status_anggota"]')->item(0);
+            ->query('//fieldset[@data-status-laporan]')->item(0);
 
         $semua = $status(['tampilkan' => '1']);
         $this->assertFalse($semua->hasAttribute('disabled'));
-        $this->assertSame("anggota !== ''", $semua->getAttribute('x-bind:disabled'));
+        $this->assertSame("mode !== 'semua'", $semua->getAttribute('x-bind:disabled'));
         $this->assertTrue($status(['tampilkan' => '1', 'anggota_id' => (string) $this->budi->id])->hasAttribute('disabled'));
+        $this->assertSame(0, $this->xpath($this->actingAs($this->admin)->get(route('laporan.anggota'))->getContent())->query('//select[@name="status_anggota"]')->length);
 
         // Form mengikuti event anggota-dipilih dari partial.
         $html = $this->actingAs($this->admin)->get(route('laporan.anggota'))->getContent();
-        $this->assertStringContainsString('x-on:anggota-dipilih="anggota = $event.detail.id"', $html);
+        $this->assertStringContainsString('x-on:anggota-dipilih="anggota = $event.detail.id;', $html);
 
         // Error anggota_id (exists) tampil di bawah pemicu partial.
         $html = $this->actingAs($this->admin)
@@ -227,6 +229,257 @@ class LaporanTest extends TestCase
             ->getContent();
         $error = $this->xpath($html)->query('//*[@data-pilih-anggota-cari]//p[contains(@class, "text-red-700")]');
         $this->assertSame(1, $error->length);
+    }
+
+    // ---------------------------------------------------------------
+    // R1b C — filter laporan per anggota yang jelas
+    // ---------------------------------------------------------------
+
+    public function test_tab_mode_laporan_dan_keadaan_awal_mengikuti_filter(): void
+    {
+        $mode = function (array $query): array {
+            $xpath = $this->xpath($this->actingAs($this->admin)->get(route('laporan.anggota', $query))->getContent());
+            $tab = [];
+            foreach ($xpath->query('//*[@data-mode-laporan]/button') as $tombol) {
+                $this->assertSame('button', $tombol->getAttribute('type'));
+                $tab[trim($tombol->textContent)] = $tombol->getAttribute('aria-pressed');
+            }
+
+            return [$tab, $xpath];
+        };
+
+        [$tab, $xpath] = $mode([]);
+        $this->assertSame(['Semua anggota' => 'true', 'Satu anggota' => 'false'], $tab);
+        $this->assertStringContainsString("mode: 'semua'", $xpath->query('//form[@action="'.route('laporan.anggota').'"]')->item(0)->getAttribute('x-data'));
+        // Status tampil (tab garis bawah kecil, bukan select); pemilih tersembunyi sampai Alpine (x-cloak).
+        $this->assertSame(['', 'aktif', 'nonaktif'], array_map(fn ($el) => $el->getAttribute('value'), iterator_to_array($xpath->query('//*[@data-status-laporan]//input[@type="radio"][@name="status_anggota"]'))));
+        $this->assertSame(['Semua status', 'Aktif', 'Nonaktif'], array_map(fn ($el) => trim($el->textContent), iterator_to_array($xpath->query('//*[@data-status-laporan]//label'))));
+        $this->assertSame('', $xpath->query('//input[@name="status_anggota"][@checked]')->item(0)->getAttribute('value'), 'Bawaan Semua status.');
+        $this->assertFalse($xpath->query('//*[@data-status-laporan]')->item(0)->hasAttribute('x-cloak'));
+        $this->assertTrue($xpath->query('//*[@data-pemilih-laporan]')->item(0)->hasAttribute('x-cloak'));
+
+        [$tab, $xpath] = $mode(['status_anggota' => 'nonaktif']);
+        $this->assertSame('true', $tab['Semua anggota']);
+        $this->assertSame('nonaktif', $xpath->query('//input[@name="status_anggota"][@checked]')->item(0)->getAttribute('value'));
+
+        [$tab, $xpath] = $mode(['tampilkan' => '1', 'anggota_id' => (string) $this->budi->id]);
+        $this->assertSame(['Semua anggota' => 'false', 'Satu anggota' => 'true'], $tab);
+        $this->assertTrue($xpath->query('//*[@data-status-laporan]')->item(0)->hasAttribute('x-cloak'));
+        $this->assertFalse($xpath->query('//*[@data-pemilih-laporan]')->item(0)->hasAttribute('x-cloak'));
+    }
+
+    public function test_anggota_id_dan_status_dinonaktifkan_sesuai_mode(): void
+    {
+        $xpath = fn (array $query) => $this->xpath($this->actingAs($this->admin)->get(route('laporan.anggota', $query))->getContent());
+
+        // Semua anggota: anggota_id disabled (tidak terkirim), status aktif.
+        $semua = $xpath([]);
+        $id = $semua->query('//*[@data-pilih-anggota-cari]/input[@name="anggota_id"]')->item(0);
+        $this->assertTrue($id->hasAttribute('disabled'));
+        $this->assertSame("mode !== 'satu'", $id->getAttribute('x-bind:disabled'));
+        $this->assertFalse($semua->query('//fieldset[@data-status-laporan]')->item(0)->hasAttribute('disabled'));
+
+        // Satu anggota: anggota_id terkirim, fieldset status disabled (radio di dalamnya tidak terkirim).
+        $satu = $xpath(['tampilkan' => '1', 'anggota_id' => (string) $this->budi->id, 'status_anggota' => 'nonaktif']);
+        $this->assertFalse($satu->query('//*[@data-pilih-anggota-cari]/input[@name="anggota_id"]')->item(0)->hasAttribute('disabled'));
+        $this->assertTrue($satu->query('//fieldset[@data-status-laporan]')->item(0)->hasAttribute('disabled'));
+        $this->assertSame("mode !== 'semua'", $satu->query('//fieldset[@data-status-laporan]')->item(0)->getAttribute('x-bind:disabled'));
+
+        // Setor/tarik tidak ikut berubah: input anggota_id tanpa disabled/x-bind.
+        foreach ([route('transaksi.setor.create'), route('transaksi.tarik.create')] as $url) {
+            $input = $this->xpath($this->actingAs($this->admin)->get($url)->getContent())->query('//*[@data-pilih-anggota-cari]/input[@name="anggota_id"]')->item(0);
+            $this->assertFalse($input->hasAttribute('disabled'), $url);
+            $this->assertFalse($input->hasAttribute('x-bind:disabled'), $url);
+        }
+    }
+
+    public function test_tanpa_anggota_terpilih_di_mode_satu_muncul_pilih_anggota_dulu(): void
+    {
+        $xpath = $this->xpath($this->actingAs($this->admin)->get(route('laporan.anggota'))->getContent());
+        $form = $xpath->query('//form[@action="'.route('laporan.anggota').'"]')->item(0);
+
+        // Kiriman dibatalkan (defaultPrevented) dan pesan tampil; cegah-kirim-ganda melewati event yang sudah dibatalkan.
+        $this->assertSame("if (mode === 'satu' && anggota === '') { \$event.preventDefault(); galat = true }", $form->getAttribute('x-on:submit'));
+        $pesan = $xpath->query('//*[@data-pemilih-laporan]//*[@data-galat-pilih-anggota]')->item(0);
+        $this->assertSame('Pilih anggota dulu.', trim($pesan->textContent));
+        $this->assertSame('galat', $pesan->getAttribute('x-show'));
+        $this->assertTrue($pesan->hasAttribute('x-cloak'));
+        // Pesan berada di bawah pemilih.
+        $this->assertSame(1, $xpath->query('//*[@data-pemilih-laporan]/*[@data-pilih-anggota-cari]/following-sibling::*[@data-galat-pilih-anggota]')->length);
+    }
+
+    public function test_pemilih_laporan_panel_lebar_dan_info_bergabung_transaksi_terakhir_tanpa_n_plus_1(): void
+    {
+        $dewi = Anggota::factory()->create(['nama' => 'Dewi', 'tanggal_bergabung' => '2026-11-10']);
+
+        DB::enableQueryLog();
+        $respons = $this->actingAs($this->admin)->get(route('laporan.anggota', ['anggota_id' => (string) $this->budi->id]));
+        $kueri = collect(DB::getQueryLog())->pluck('query');
+        DB::disableQueryLog();
+
+        // Satu query anggota dengan subquery MAX, tanpa query transaksi per anggota.
+        $this->assertSame(1, $kueri->filter(fn ($q) => str_contains($q, 'from "anggota"') && str_contains($q, 'MAX(tanggal_transaksi)'))->count());
+        $this->assertSame(0, $kueri->filter(fn ($q) => str_starts_with($q, 'select * from "transaksi_simpanan"'))->count());
+
+        $daftar = $respons->viewData('anggotaList');
+        $this->assertSame('2026-11-05', Carbon::parse($daftar->firstWhere('id', $this->budi->id)->transaksi_terakhir)->toDateString());
+        $this->assertNull($daftar->firstWhere('id', $dewi->id)->transaksi_terakhir);
+
+        $xpath = $this->xpath($respons->getContent());
+        $opsi = fn (Anggota $a) => $xpath->query('//*[@data-opsi-anggota="'.$a->id.'"]')->item(0);
+        $this->assertSame('2026-11-01', $opsi($this->budi)->getAttribute('data-bergabung'));
+        $this->assertSame('Bergabung 1 November 2026 · Transaksi terakhir 5 November 2026', $opsi($this->budi)->getAttribute('data-info'));
+        $this->assertSame('Bergabung 10 November 2026 · Belum ada transaksi', $opsi($dewi)->getAttribute('data-info'));
+        $this->assertSame('Bergabung 1 November 2026 · Transaksi terakhir 1 November 2026', $opsi($this->andi)->getAttribute('data-info'));
+
+        // Baris info untuk anggota terpilih, di bawah pemilih.
+        $info = $xpath->query('//*[@data-pilih-anggota-cari]//*[@data-info-anggota-laporan]')->item(0);
+        $this->assertSame('Bergabung 1 November 2026 · Transaksi terakhir 5 November 2026', trim($info->textContent));
+        $this->assertStringContainsString('text-xs', $info->getAttribute('class'));
+        $this->assertStringContainsString('text-stone-500', $info->getAttribute('class'));
+
+        // Panel dilebarkan supaya nama tidak terpotong.
+        $panel = $xpath->query('//*[@data-pilih-anggota-cari]/div[@x-show="buka"]')->item(0);
+        foreach (['w-max', 'min-w-full', 'max-w-[32rem]'] as $kelas) {
+            $this->assertContains($kelas, explode(' ', $panel->getAttribute('class')), $kelas);
+        }
+        $this->assertNotContains('inset-x-0', explode(' ', $panel->getAttribute('class')));
+
+        // Setor tidak berubah: panel inset-x-0, tanpa data-info dan baris info.
+        $setor = $this->xpath($this->actingAs($this->admin)->get(route('transaksi.setor.create'))->getContent());
+        $this->assertContains('inset-x-0', explode(' ', $setor->query('//*[@data-pilih-anggota-cari]/div[@x-show="buka"]')->item(0)->getAttribute('class')));
+        $this->assertSame(0, $setor->query('//*[@data-info]|//*[@data-info-anggota-laporan]')->length);
+    }
+
+    public function test_periode_cepat_berisi_rentang_yang_benar_termasuk_batas_tanggal(): void
+    {
+        $kasus = [
+            '2026-11-12 14:30:00' => [
+                'Bulan ini' => ['2026-11-01', '2026-11-12'],
+                'Bulan lalu' => ['2026-10-01', '2026-10-31'],
+                '3 bulan terakhir' => ['2026-08-12', '2026-11-12'],
+                'Tahun ini' => ['2026-01-01', '2026-11-12'],
+                'Tahun lalu' => ['2025-01-01', '2025-12-31'],
+            ],
+            // Awal tahun: bulan lalu dan tahun lalu menyeberang tahun; rentang berjalan satu hari.
+            '2026-01-01 00:05:00' => [
+                'Bulan ini' => ['2026-01-01', '2026-01-01'],
+                'Bulan lalu' => ['2025-12-01', '2025-12-31'],
+                '3 bulan terakhir' => ['2025-10-01', '2026-01-01'],
+                'Tahun ini' => ['2026-01-01', '2026-01-01'],
+                'Tahun lalu' => ['2025-01-01', '2025-12-31'],
+            ],
+            // Akhir bulan panjang: mundur 3 bulan tanpa overflow (sama dengan Riwayat), bulan lalu Februari penuh.
+            '2026-05-31 23:59:00' => [
+                'Bulan ini' => ['2026-05-01', '2026-05-31'],
+                'Bulan lalu' => ['2026-04-01', '2026-04-30'],
+                '3 bulan terakhir' => ['2026-02-28', '2026-05-31'],
+                'Tahun ini' => ['2026-01-01', '2026-05-31'],
+                'Tahun lalu' => ['2025-01-01', '2025-12-31'],
+            ],
+            '2028-03-31 08:00:00' => [
+                'Bulan ini' => ['2028-03-01', '2028-03-31'],
+                'Bulan lalu' => ['2028-02-01', '2028-02-29'],
+                '3 bulan terakhir' => ['2027-12-31', '2028-03-31'],
+                'Tahun ini' => ['2028-01-01', '2028-03-31'],
+                'Tahun lalu' => ['2027-01-01', '2027-12-31'],
+            ],
+        ];
+
+        foreach ($kasus as $sekarang => $harapan) {
+            Carbon::setTestNow($sekarang);
+            $periode = $this->actingAs($this->admin)->get(route('laporan.anggota'))->viewData('periodeCepat');
+            $this->assertSame(['Semua waktu' => [null, null]] + $harapan, $periode, $sekarang);
+            $this->assertSame($periode, $this->actingAs($this->admin)->get(route('laporan.keseluruhan'))->viewData('periodeCepat'), $sekarang);
+        }
+    }
+
+    public function test_tombol_periode_cepat_mengisi_tanpa_kirim_dan_menandai_yang_cocok(): void
+    {
+        $tombol = function (array $query): array {
+            $xpath = $this->xpath($this->actingAs($this->admin)->get(route('laporan.anggota', $query))->getContent());
+            $hasil = [];
+            foreach ($xpath->query('//*[@data-periode-cepat]//button') as $el) {
+                $this->assertSame('button', $el->getAttribute('type'), 'Tombol cepat tidak mengirim form.');
+                $kelas = explode(' ', $el->getAttribute('class'));
+                $this->assertContains('rounded-md', $kelas);
+                $this->assertContains('h-8', $kelas, 'Ukuran sm.');
+                $this->assertContains('aria-pressed:border-arang', $kelas);
+                $hasil[trim($el->textContent)] = $el->getAttribute('aria-pressed');
+            }
+
+            return array_keys(array_filter($hasil, fn ($v) => $v === 'true'));
+        };
+
+        $xpath = $this->xpath($this->actingAs($this->admin)->get(route('laporan.anggota'))->getContent());
+        $this->assertSame(
+            ['Semua waktu', 'Bulan ini', 'Bulan lalu', '3 bulan terakhir', 'Tahun ini', 'Tahun lalu', 'Pilih tanggal…'],
+            array_map(fn ($el) => trim($el->textContent), iterator_to_array($xpath->query('//*[@data-periode-cepat]//button'))),
+        );
+        // Tombol cepat berada di atas kolom tanggal.
+        $this->assertSame(1, $xpath->query('//*[@data-periode-cepat]//button/ancestor::div[1]/parent::div/following-sibling::div//input[@name="tanggal_mulai"]')->length);
+        $this->assertSame("pilih('Bulan ini')", $xpath->query('//*[@data-periode-cepat]//button[@data-periode="Bulan ini"]')->item(0)->getAttribute('x-on:click'));
+        $this->assertSame('$refs.mulai.focus()', $xpath->query('//*[@data-periode-cepat]//button[@data-periode="kustom"]')->item(0)->getAttribute('x-on:click'));
+
+        $this->assertSame(['Semua waktu'], $tombol([]));
+        $this->assertSame(['Bulan ini'], $tombol(['tanggal_mulai' => '2026-11-01', 'tanggal_selesai' => '2026-11-12']));
+        $this->assertSame(['Tahun lalu'], $tombol(['tanggal_mulai' => '2025-01-01', 'tanggal_selesai' => '2025-12-31']));
+        $this->assertSame(['Pilih tanggal…'], $tombol(['tanggal_mulai' => '2026-11-03', 'tanggal_selesai' => '2026-11-04']));
+
+        // Mode Satu anggota: rentang dinaikkan ke tanggal bergabung (jawaban 5a).
+        $dewi = Anggota::factory()->create(['nama' => 'Dewi', 'tanggal_bergabung' => '2026-11-10']);
+        $this->assertSame(['Bulan ini'], $tombol(['anggota_id' => (string) $dewi->id, 'tanggal_mulai' => '2026-11-10', 'tanggal_selesai' => '2026-11-12']));
+    }
+
+    public function test_kolom_tanggal_max_hari_ini_dan_min_tanggal_bergabung_di_mode_satu(): void
+    {
+        $dewi = Anggota::factory()->create(['nama' => 'Dewi', 'tanggal_bergabung' => '2026-11-10']);
+        $kolom = fn (string $url) => iterator_to_array($this->xpath($this->actingAs($this->admin)->get($url)->getContent())
+            ->query('//input[@name="tanggal_mulai" or @name="tanggal_selesai"]'));
+
+        foreach ($kolom(route('laporan.anggota')) as $el) {
+            $this->assertSame('2026-11-12', $el->getAttribute('max'));
+            $this->assertFalse($el->hasAttribute('min'), 'Semua anggota tanpa min.');
+            $this->assertSame('batas() || null', $el->getAttribute('x-bind:min'));
+        }
+        foreach ($kolom(route('laporan.anggota', ['anggota_id' => (string) $dewi->id])) as $el) {
+            $this->assertSame('2026-11-12', $el->getAttribute('max'));
+            $this->assertSame('2026-11-10', $el->getAttribute('min'));
+        }
+        // Batas min klien mengikuti anggota terpilih (event anggota-dipilih membawa tanggal bergabung).
+        $html = $this->actingAs($this->admin)->get(route('laporan.anggota'))->getContent();
+        $this->assertStringContainsString("bergabung: el.dataset.bergabung ?? ''", $html);
+        $this->assertStringContainsString("return mode === 'satu' && bergabung ? bergabung : '' || '';", html_entity_decode($html, ENT_QUOTES));
+
+        // Laporan keseluruhan: max hari ini, tanpa min.
+        $keseluruhan = $kolom(route('laporan.keseluruhan'));
+        $this->assertCount(2, $keseluruhan);
+        foreach ($keseluruhan as $el) {
+            $this->assertSame('2026-11-12', $el->getAttribute('max'));
+            $this->assertFalse($el->hasAttribute('min'));
+        }
+        // Validasi server tetap: tanggal masa depan tidak ditolak oleh server (aturan FormRequest tidak berubah).
+        $this->tampilkan(['tanggal_mulai' => '2026-11-01', 'tanggal_selesai' => '2026-12-31']);
+    }
+
+    public function test_tombol_cepat_ada_di_laporan_keseluruhan_dan_filter_lain_tetap(): void
+    {
+        $xpath = $this->xpath($this->actingAs($this->admin)->get(route('laporan.keseluruhan', ['tanggal_mulai' => '2026-10-01', 'tanggal_selesai' => '2026-10-31']))->getContent());
+        $form = '//form[@action="'.route('laporan.keseluruhan').'"]';
+
+        $this->assertSame(1, $xpath->query($form.'//*[@data-periode-cepat]')->length);
+        $this->assertSame('true', $xpath->query($form.'//*[@data-periode-cepat]//button[@data-periode="Bulan lalu"]')->item(0)->getAttribute('aria-pressed'));
+        foreach (['jenis_simpanan_id', 'jenis_transaksi', 'status_anggota'] as $nama) {
+            $this->assertSame(1, $xpath->query($form.'//select[@name="'.$nama.'"]')->length, $nama);
+        }
+    }
+
+    public function test_nama_field_form_laporan_per_anggota_tetap(): void
+    {
+        $xpath = $this->xpath($this->actingAs($this->admin)->get(route('laporan.anggota'))->getContent());
+        $nama = array_values(array_unique(array_map(fn ($el) => $el->getAttribute('name'), iterator_to_array($xpath->query('//form[@action="'.route('laporan.anggota').'"]//*[@name]')))));
+
+        $this->assertSame(['tampilkan', 'status_anggota', 'anggota_id', 'tanggal_mulai', 'tanggal_selesai'], $nama);
     }
 
     private function xpath(string $html): \DOMXPath

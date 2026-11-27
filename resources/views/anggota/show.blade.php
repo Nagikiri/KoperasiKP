@@ -25,7 +25,8 @@
         <x-slot:actions>
             <x-ui.button variant="secondary" :href="route('anggota.edit', $anggota)" icon="pencil-square">Ubah</x-ui.button>
             @if ($aktif)
-                <x-ui.button variant="danger" type="button" icon="no-symbol"
+                {{-- R1b B: x-data supaya Alpine memasang x-on:click (tombol ini di luar komponen Alpine mana pun). --}}
+                <x-ui.button variant="danger" type="button" icon="no-symbol" x-data data-aksi-nonaktifkan
                              x-on:click="$dispatch('open-modal', 'nonaktifkan-{{ $anggota->id }}')">Nonaktifkan</x-ui.button>
                 <x-ui.button :href="route('transaksi.setor.create', ['anggota_id' => $anggota->id])">Catat setoran</x-ui.button>
             @endif

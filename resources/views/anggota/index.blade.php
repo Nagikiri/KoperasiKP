@@ -65,8 +65,8 @@
                             {{-- B.5 / H.3.3: baris nonaktif redup (nama stone-500, teks lain stone-400); badge tidak diredupkan. --}}
                             <tr data-baris-anggota="{{ $item->id }}" @class(['text-stone-400' => ! $aktif]) @if (! $aktif) data-baris-nonaktif @endif>
                                 <td>
-                                    {{-- R1 E.1/E.2: tanpa avatar, nama tanpa garis bawah permanen (hanya saat hover), penanda nonaktif di baris nomor. --}}
-                                    <x-ui.sel-anggota :anggota="$item" redup potong />
+                                    {{-- R1 E.1/E.2: tanpa avatar, nama tanpa garis bawah permanen (hanya saat hover). R1b A: tanpa penanda nonaktif di baris nomor (kolom Status sudah ada). --}}
+                                    <x-ui.sel-anggota :anggota="$item" redup potong :penanda="false" />
                                 </td>
                                 <td class="whitespace-nowrap font-mono tabular-nums" data-nik-samar>{{ Format::nikSamar($item->nik) }}</td>
                                 <td class="whitespace-nowrap tabular-nums">{{ $item->no_telepon }}</td>
@@ -81,7 +81,8 @@
                                             <x-ui.icon name="pencil-square" class="h-4 w-4 text-stone-500" />
                                         </x-ui.button>
                                         @if ($aktif)
-                                            <x-ui.button variant="ghost" size="sm" square type="button" data-aksi-nonaktifkan
+                                            {{-- R1b B: x-data menjadikan tombol komponen Alpine; tanpa itu x-on:click tidak dipasang dan modal tidak terbuka. --}}
+                                            <x-ui.button variant="ghost" size="sm" square type="button" data-aksi-nonaktifkan x-data
                                                          class="group hover:!bg-red-50 hover:text-red-600"
                                                          x-on:click="$dispatch('open-modal', 'nonaktifkan-{{ $item->id }}')"
                                                          aria-label="Nonaktifkan {{ $item->nama }}" title="Nonaktifkan {{ $item->nama }}">

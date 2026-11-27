@@ -8,6 +8,7 @@ use App\Http\Requests\LaporanAnggotaRequest;
 use App\Http\Requests\LaporanKeseluruhanRequest;
 use App\Models\Anggota;
 use App\Models\JenisSimpanan;
+use App\Models\TransaksiSimpanan;
 use App\Services\LaporanService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -37,11 +38,45 @@ class LaporanController extends Controller
             $laporan = $this->buatLaporan($request, $filter);
         }
 
+        // R1b C.3: tiap anggota membawa tanggal_bergabung dan transaksi_terakhir (MAX tanggal_transaksi semua jenis)
+        // lewat subquery di query yang sama, jadi tetap satu query tanpa N+1.
+        $anggotaList = Anggota::query()
+            ->select(['id', 'no_anggota', 'nama', 'status', 'tanggal_bergabung'])
+            ->addSelect(['transaksi_terakhir' => TransaksiSimpanan::query()
+                ->selectRaw('MAX(tanggal_transaksi)')
+                ->whereColumn('transaksi_simpanan.anggota_id', 'anggota.id')])
+            ->orderBy('nama')
+            ->get();
+
         return view('laporan.anggota', [
-            'anggotaList' => Anggota::query()->orderBy('nama')->get(['id', 'no_anggota', 'nama', 'status']),
+            'anggotaList' => $anggotaList,
             'filter' => $filter,
             'laporan' => $laporan,
+            'periodeCepat' => self::periodeCepat(),
         ]);
+    }
+
+    /**
+     * Tombol cepat periode laporan (R1b C.4, C.6): label → [mulai, selesai] (Y-m-d, null = kosong), dihitung di server
+     * dari now() supaya tidak bergantung jam browser. Rentang yang berjalan berakhir hari ini (sama dengan
+     * TransaksiSimpanan::scopeFilter; "3 bulan terakhir" = mundur 3 bulan dari hari ini). "Pilih tanggal…" tidak
+     * punya rentang, jadi tidak termasuk di sini.
+     *
+     * @return array<string, array{0: string|null, 1: string|null}>
+     */
+    public static function periodeCepat(): array
+    {
+        $hariIni = now()->toDateString();
+        $tahunLalu = now()->startOfYear()->subYearNoOverflow();
+
+        return [
+            'Semua waktu' => [null, null],
+            'Bulan ini' => [now()->startOfMonth()->toDateString(), $hariIni],
+            'Bulan lalu' => [now()->startOfMonth()->subMonthNoOverflow()->toDateString(), now()->startOfMonth()->subDay()->toDateString()],
+            '3 bulan terakhir' => [now()->startOfDay()->subMonthsNoOverflow(3)->toDateString(), $hariIni],
+            'Tahun ini' => [now()->startOfYear()->toDateString(), $hariIni],
+            'Tahun lalu' => [$tahunLalu->toDateString(), $tahunLalu->copy()->endOfYear()->toDateString()],
+        ];
     }
 
     public function pdf(LaporanAnggotaRequest $request): Response
@@ -74,6 +109,7 @@ class LaporanController extends Controller
             'filter' => $filter,
             'jenisSimpanan' => JenisSimpanan::query()->orderBy('id')->get(),
             'laporan' => $this->buatLaporanKeseluruhan($request, $filter, 50),
+            'periodeCepat' => self::periodeCepat(),
         ]);
     }
 

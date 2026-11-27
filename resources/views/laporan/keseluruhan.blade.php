@@ -26,19 +26,10 @@
             </x-slot:header>
 
             <form method="GET" action="{{ route('laporan.keseluruhan') }}" class="space-y-5">
-                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-                    <div>
-                        <x-ui.label for="tanggal_mulai" value="Tanggal mulai" />
-                        <x-ui.input type="date" id="tanggal_mulai" name="tanggal_mulai" value="{{ $filter['tanggal_mulai'] }}" class="mt-1.5" />
-                        <x-ui.field-error name="tanggal_mulai" />
-                    </div>
+                {{-- R1b C.6: tombol cepat periode yang sama dengan laporan per anggota; max = hari ini, tanpa min. --}}
+                <x-ui.periode-cepat :periode="$periodeCepat" :mulai="$filter['tanggal_mulai']" :selesai="$filter['tanggal_selesai']" />
 
-                    <div>
-                        <x-ui.label for="tanggal_selesai" value="Tanggal selesai" />
-                        <x-ui.input type="date" id="tanggal_selesai" name="tanggal_selesai" value="{{ $filter['tanggal_selesai'] }}" class="mt-1.5" />
-                        <x-ui.field-error name="tanggal_selesai" />
-                    </div>
-
+                <div class="grid gap-4 sm:grid-cols-3">
                     <div>
                         <x-ui.label for="jenis_simpanan_id" value="Jenis simpanan" />
                         <x-ui.select id="jenis_simpanan_id" name="jenis_simpanan_id" class="mt-1.5">

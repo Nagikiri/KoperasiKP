@@ -9,8 +9,14 @@
         $saldo   (opsional, form tarik) peta { id anggota: saldo sukarela }; tampil rata kanan di tiap opsi.
         $semua   (opsional, tidak dipakai sejak revisi 2 pasca-F4b) true = mode filter: opsi pertama "Semua anggota"
                  (nilai kosong), tanpa label terlihat, tanpa pesan error, jangkar data-pilih-anggota.
-        $opsiSemua (opsional, F5 H.3 laporan per anggota) true = label "Anggota" dan pesan error anggota_id tetap tampil,
-                 opsi pertama "Semua anggota" (nilai kosong). Memilih tidak mengirim form (laporan memakai tombol Tampilkan).
+        $opsiSemua (opsional, F5 H.3; tidak dipakai laporan sejak R1b C.2 karena "Semua anggota" diwakili tab) true =
+                 opsi pertama "Semua anggota" (nilai kosong), pemicu kosong bertuliskan "Semua anggota".
+        R1b C (laporan per anggota; setor/tarik/Riwayat tidak memakainya, jadi tidak berubah):
+        $panelLebar   true = panel daftar selebar isi (w-max min-w-full max-w-[32rem]) supaya nama tidak terpotong.
+        $infoAnggota  true = tiap opsi membawa data-bergabung (Y-m-d) dan data-info ("Bergabung … · Transaksi terakhir …"
+                      atau "· Belum ada transaksi"); butuh kolom tanggal_bergabung dan transaksi_terakhir di $daftar.
+        $nonaktifJika ekspresi Alpine (dari komponen induk) untuk x-bind:disabled input anggota_id; $nonaktifAwal = nilai
+                      awalnya dari server (input disabled tidak ikut terkirim).
     - Setelah memilih, elemen ini mengirim event `anggota-dipilih` (detail.id, detail.berubah) yang dibaca
       resources/js/transaksi-tarik.js dan bilah filter Riwayat.
     Jangkar test: data-pilih-anggota-cari, tiap opsi data-opsi-anggota="{id}", teks pemicu data-anggota-terpilih.
@@ -23,6 +29,10 @@
     $saldo ??= null;
     $semua ??= false;
     $opsiSemua = $semua || ($opsiSemua ?? false);
+    $panelLebar ??= false;
+    $infoAnggota ??= false;
+    $nonaktifJika ??= null;
+    $nonaktifAwal ??= false;
     $idAwal = (string) ($idAwal ?? old('anggota_id', $anggotaTerpilih ?? null));
     $terpilih = $daftar->first(fn ($anggota) => (string) $anggota->id === $idAwal);
     $salah = ! $semua && $errors->has('anggota_id');
@@ -30,6 +40,8 @@
     $labelOpsi = fn ($anggota) => $anggota->no_anggota.' - '.Format::namaAnggota($anggota->nama, $anggota->status ?? Anggota::STATUS_AKTIF);
     $kosong = $opsiSemua ? 'Semua anggota' : 'Pilih anggota';
     $labelTerpilih = $terpilih ? $labelOpsi($terpilih) : $kosong;
+    $labelInfo = fn ($anggota) => 'Bergabung '.Format::tanggal($anggota->tanggal_bergabung).' · '
+        .($anggota->transaksi_terakhir !== null ? 'Transaksi terakhir '.Format::tanggal($anggota->transaksi_terakhir) : 'Belum ada transaksi');
 @endphp
 
 <div class="relative" data-pilih-anggota-cari @if ($semua) data-pilih-anggota @endif
@@ -40,6 +52,7 @@
          label: @js($labelTerpilih),
          kosong: @js($kosong),
          semua: @js($opsiSemua),
+         info: @js($infoAnggota && $terpilih ? $labelInfo($terpilih) : ''),
          sorot: '',
          cocok(el) {
              const q = this.cari.trim().toLowerCase();
@@ -77,14 +90,15 @@
              const berubah = this.id !== el.dataset.opsiAnggota;
              this.id = el.dataset.opsiAnggota;
              this.label = el.dataset.label;
+             this.info = el.dataset.info ?? '';
              this.$refs.nilai.value = this.id;
              this.tutup();
-             this.$dispatch('anggota-dipilih', { id: this.id, berubah });
+             this.$dispatch('anggota-dipilih', { id: this.id, berubah, bergabung: el.dataset.bergabung ?? '' });
          },
      }"
      x-on:keydown.escape="if (buka) { $event.stopPropagation(); tutup() }"
      x-on:click.outside="if (buka) tutup(false)">
-    <input type="hidden" name="anggota_id" value="{{ $terpilih?->id }}" x-ref="nilai">
+    <input type="hidden" name="anggota_id" value="{{ $terpilih?->id }}" x-ref="nilai"@if ($nonaktifJika !== null) x-bind:disabled="{{ $nonaktifJika }}"@endif @disabled($nonaktifAwal)>
 
     @unless ($semua)
         <x-ui.label for="pilih-anggota" value="Anggota" />
@@ -109,11 +123,17 @@
     @unless ($semua)
         <x-ui.field-error name="anggota_id" />
     @endunless
+    @if ($infoAnggota)
+        {{-- R1b C.3: satu baris info anggota terpilih; isi dari data-info opsi (dirender server), Alpine hanya menukar. --}}
+        <p class="mt-1.5 text-xs text-stone-500" data-info-anggota-laporan x-show="id !== '' && info !== ''" x-text="info"
+           @if ($terpilih === null) x-cloak @endif>{{ $terpilih ? $labelInfo($terpilih) : '' }}</p>
+    @endif
 
     <div x-cloak x-show="buka" x-transition.opacity.duration.100ms
          @class([
              'absolute z-20 mt-2 overflow-hidden rounded-md border border-stone-300 bg-white',
-             'inset-x-0' => ! $semua,
+             'inset-x-0' => ! $semua && ! $panelLebar,
+             'left-0 w-max min-w-full max-w-[32rem]' => ! $semua && $panelLebar,
              'inset-x-0 md:left-auto md:w-[26rem]' => $semua,
          ])>
         <div class="relative border-b border-stone-200 p-2">
@@ -134,9 +154,11 @@
                 'nama' => $anggota->nama,
                 'no' => $anggota->no_anggota,
                 'saldo' => $saldo !== null ? Format::rupiah($saldo[$anggota->id] ?? 0) : null,
+                'bergabung' => $infoAnggota ? $anggota->tanggal_bergabung?->toDateString() : null,
+                'info' => $infoAnggota ? $labelInfo($anggota) : null,
             ]);
             if ($opsiSemua) {
-                $opsi->prepend(['id' => '', 'label' => 'Semua anggota', 'nama' => '', 'no' => '', 'saldo' => null]);
+                $opsi->prepend(['id' => '', 'label' => 'Semua anggota', 'nama' => '', 'no' => '', 'saldo' => null, 'bergabung' => null, 'info' => null]);
             }
         @endphp
         <ul id="daftar-anggota" role="listbox" aria-label="Daftar anggota" x-ref="daftar" class="max-h-72 overflow-y-auto py-1">
@@ -144,6 +166,7 @@
                 <li role="option" data-opsi-anggota="{{ $item['id'] }}" data-label="{{ $item['label'] }}"
                     data-nama="{{ $item['nama'] }}" data-no="{{ $item['no'] }}"
                     data-kunci="{{ mb_strtolower($item['label']) }}"
+                    @if ($item['info'] !== null) data-bergabung="{{ $item['bergabung'] }}" data-info="{{ $item['info'] }}" @endif
                     x-show="cocok($el)"
                     x-on:click="pilih($el)"
                     x-on:mouseenter="sorot = $el.dataset.opsiAnggota"

@@ -4,8 +4,9 @@
     anggota: model Anggota (id, nama, no_anggota, status). redup: nama stone-500 untuk baris nonaktif (daftar anggota).
     potong: nama dan nomor dipotong dengan ellipsis bila sempit (daftar anggota, belum setor wajib); Riwayat tanpa potong.
     aktif: opsional; diisi bila query tidak memuat kolom status tetapi daftarnya pasti anggota aktif (belum setor wajib).
+    penanda: false = tanpa "· ● Nonaktif" di baris nomor (R1b A: Data Anggota, karena kolom Status sudah ada).
 --}}
-@props(['anggota', 'redup' => false, 'potong' => false, 'aktif' => null])
+@props(['anggota', 'redup' => false, 'potong' => false, 'aktif' => null, 'penanda' => true])
 @php $aktif ??= $anggota->status === \App\Models\Anggota::STATUS_AKTIF; @endphp
 <div {{ $attributes->merge(['class' => 'min-w-0']) }}>
     <a href="{{ route('anggota.show', $anggota) }}" data-tautan-detail
@@ -17,9 +18,9 @@
        ])>{{ $anggota->nama }}</a>
     <div class="flex items-center gap-1.5 text-xs text-stone-500" data-baris-no-anggota>
         <span @class(['font-mono', 'truncate' => $potong])>{{ $anggota->no_anggota }}</span>
-        @unless ($aktif)
+        @if (! $aktif && $penanda)
             <span aria-hidden="true">·</span>
             <span class="inline-flex shrink-0 items-center gap-1 text-stone-600" data-penanda-nonaktif><span aria-hidden="true" class="h-1.5 w-1.5 shrink-0 rounded-full bg-red-600"></span>Nonaktif</span>
-        @endunless
+        @endif
     </div>
 </div>
