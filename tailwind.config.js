@@ -13,15 +13,16 @@ export default {
     theme: {
         extend: {
             fontFamily: {
-                sans: ['Inter', ...defaultTheme.fontFamily.sans],
+                sans: ['"IBM Plex Sans"', ...defaultTheme.fontFamily.sans],
+                mono: ['"IBM Plex Mono"', ...defaultTheme.fontFamily.mono],
             },
             colors: {
                 arang: { DEFAULT: '#1F2328', 700: '#2D333B', 600: '#3D444D', 400: '#8B949E' },
                 merah: { DEFAULT: '#C8102E', 700: '#A50D26', 100: '#F9D3D8', 50: '#FDECEE' },
                 emas: { DEFAULT: '#D4A017', 700: '#9A7410', 50: '#FBF3DC' },
-                // F2d A: palet data (grafik, ikon, nominal setor/tarik). Badge status tetap emerald/red.
-                setor: { DEFAULT: '#3F63A8', 50: '#EDF1F8' }, // biru baja (setoran)
-                tarik: { DEFAULT: '#B85A41', 50: '#F8EDE9' }, // terakota (penarikan)
+                // R1 D.1: palet data sesuai tema (grafik, titik, nominal setor/tarik). Teks memakai 700; titik, batang, latar memakai DEFAULT/50.
+                setor: { DEFAULT: '#C8930E', 700: '#8A6508', 50: '#FBF3DC' }, // emas (setoran)
+                tarik: { DEFAULT: '#57606A', 700: '#57606A', 50: '#EEF0F2' }, // abu arang (penarikan)
                 // F2d A.2: HANYA untuk angka selisih bertanda (naik = saldo bertambah).
                 naik: '#2F7D57',
                 turun: '#B3412F',

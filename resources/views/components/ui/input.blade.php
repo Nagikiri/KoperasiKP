@@ -5,7 +5,7 @@
 @props(['bag' => 'default', 'pil' => false, 'ikonKiri' => false, 'ruangKanan' => false])
 @php
     $salah = $attributes->has('name') && $errors->getBag($bag)->has($attributes->get('name'));
-    $bentuk = $pil ? 'h-12 rounded-full' : 'h-11 rounded-xl';
+    $bentuk = $pil ? 'h-12 rounded-md' : 'h-11 rounded-md';
     $kiri = $ikonKiri ? 'pl-11' : ($pil ? 'pl-5' : 'pl-3.5');
     $kanan = $ruangKanan ? 'pr-12' : ($pil ? 'pr-5' : 'pr-3.5');
 @endphp

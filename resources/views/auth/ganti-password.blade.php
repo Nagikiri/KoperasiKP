@@ -9,12 +9,10 @@
                 <h2 class="text-base font-semibold text-stone-900">Profil</h2>
             </x-slot>
 
-            <div class="flex items-center gap-4">
-                <x-ui.avatar-initial :nama="$user->nama" tone="dark" size="lg" />
-                <div class="min-w-0">
-                    <p class="truncate text-base font-semibold text-stone-900">{{ $user->nama }}</p>
-                    <p class="truncate text-sm text-stone-500">{{ $user->username }}</p>
-                </div>
+            {{-- R1 C.6: tanpa avatar inisial (avatar akun hanya di topbar). --}}
+            <div class="min-w-0">
+                <p class="truncate text-base font-semibold text-stone-900">{{ $user->nama }}</p>
+                <p class="truncate text-sm text-stone-500">{{ $user->username }}</p>
             </div>
 
             <dl class="mt-6 divide-y divide-stone-200 border-t border-stone-200 text-sm">

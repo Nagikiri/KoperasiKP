@@ -14,10 +14,10 @@
     $saldoTerpilih ??= null;
     $salahJumlah = $errors->has('jumlah');
     $isiCepat = [50000, 100000, 200000, 300000, 500000, 1000000];
-    $kelasTombol = 'inline-flex h-10 items-center justify-center rounded-full border border-stone-300 bg-white px-3 text-sm font-medium text-stone-800 tabular-nums transition-colors hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-arang/30 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white';
+    $kelasTombol = 'inline-flex h-10 items-center justify-center rounded-md border border-stone-300 bg-white px-3 text-sm font-medium text-stone-800 tabular-nums transition-colors hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-arang/30 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white';
 @endphp
 
-<div class="rounded-xl border border-stone-200 p-4" data-kotak-nominal>
+<div class="rounded-md border border-stone-200 p-4" data-kotak-nominal>
     <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <label for="jumlah" class="text-xs font-medium text-stone-500">{{ $labelNominal }}</label>
         @if ($tarik)
@@ -29,7 +29,7 @@
     </div>
     <div class="relative mt-2">
         <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-5 text-xl font-medium text-stone-400" aria-hidden="true" data-awalan-rp>Rp</span>
-        <input id="jumlah" type="text" inputmode="numeric" autocomplete="off" name="jumlah" value="{{ old('jumlah') }}" class="block h-16 w-full rounded-xl border bg-white pl-14 pr-4 text-3xl font-semibold tracking-tight text-stone-900 tabular-nums placeholder:text-stone-300 focus:border-arang focus:ring-2 focus:ring-arang/20 {{ $salahJumlah ? 'border-red-300' : 'border-stone-300' }}" placeholder="0">
+        <input id="jumlah" type="text" inputmode="numeric" autocomplete="off" name="jumlah" value="{{ old('jumlah') }}" class="block h-16 w-full rounded-md border bg-white pl-14 pr-4 text-3xl font-semibold tracking-tight text-stone-900 tabular-nums placeholder:text-stone-300 focus:border-arang focus:ring-2 focus:ring-arang/20 {{ $salahJumlah ? 'border-red-300' : 'border-stone-300' }}" placeholder="0">
     </div>
     @if ($tarik)
         <p class="mt-1.5 text-xs text-amber-700" data-peringatan-saldo hidden>Melebihi saldo tersedia.</p>

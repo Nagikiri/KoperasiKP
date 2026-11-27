@@ -6,7 +6,7 @@
     <x-ui.page-header title="Data anggota"
                       :subtitle="$anggota->total().' anggota '.($search !== null ? 'ditemukan' : 'terdaftar')">
         <x-slot:actions>
-            <x-ui.button :href="route('anggota.create')" icon="user-plus">Tambah anggota</x-ui.button>
+            <x-ui.button :href="route('anggota.create')">Tambah anggota</x-ui.button>
         </x-slot:actions>
     </x-ui.page-header>
 
@@ -31,7 +31,7 @@
                 </x-ui.empty>
             @else
                 <x-ui.empty icon="users" title="Belum ada anggota" description="Tambahkan anggota pertama untuk mulai mencatat simpanan.">
-                    <x-ui.button variant="secondary" :href="route('anggota.create')" icon="user-plus">Tambah anggota</x-ui.button>
+                    <x-ui.button variant="secondary" :href="route('anggota.create')">Tambah anggota</x-ui.button>
                 </x-ui.empty>
             @endif
         @else
@@ -65,18 +65,8 @@
                             {{-- B.5 / H.3.3: baris nonaktif redup (nama stone-500, teks lain stone-400); badge tidak diredupkan. --}}
                             <tr data-baris-anggota="{{ $item->id }}" @class(['text-stone-400' => ! $aktif]) @if (! $aktif) data-baris-nonaktif @endif>
                                 <td>
-                                    <div class="flex min-w-0 items-center gap-3">
-                                        <x-ui.avatar-initial :nama="$item->nama" size="sm" />
-                                        <div class="min-w-0">
-                                            <a href="{{ route('anggota.show', $item) }}" data-tautan-detail
-                                               @class([
-                                                   'block truncate font-medium underline underline-offset-4 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-arang/30 rounded-sm',
-                                                   'text-stone-900 decoration-stone-300 hover:decoration-stone-900' => $aktif,
-                                                   'text-stone-500 decoration-stone-300 hover:decoration-stone-500' => ! $aktif,
-                                               ])>{{ $item->nama }}</a>
-                                            <div @class(['truncate font-mono text-xs', 'text-stone-500' => $aktif])>{{ $item->no_anggota }}</div>
-                                        </div>
-                                    </div>
+                                    {{-- R1 E.1/E.2: tanpa avatar, nama tanpa garis bawah permanen (hanya saat hover), penanda nonaktif di baris nomor. --}}
+                                    <x-ui.sel-anggota :anggota="$item" redup potong />
                                 </td>
                                 <td class="whitespace-nowrap font-mono tabular-nums" data-nik-samar>{{ Format::nikSamar($item->nik) }}</td>
                                 <td class="whitespace-nowrap tabular-nums">{{ $item->no_telepon }}</td>

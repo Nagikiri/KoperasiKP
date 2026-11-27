@@ -18,17 +18,17 @@ import {
 
 Chart.register(ArcElement, BarController, BarElement, CategoryScale, DoughnutController, Filler, LinearScale, LineController, LineElement, PointElement, Tooltip);
 
-// Satu sumber warna (F2c H, F2d A). Token Tailwind setor/tarik memakai nilai yang sama.
+// Satu sumber warna (F2c H, R1 D.2). Token Tailwind setor/tarik memakai nilai yang sama.
 const WARNA = {
-    setor: '#3F63A8',
-    tarik: '#B85A41',
-    saldo: '#C8930E',
-    // Gradasi isi area: warna seri -> transparan (F2c §0.2, H).
-    isiSetor: [63, 99, 168, 0.22],
-    isiTarik: [184, 90, 65, 0.18],
-    isiSaldo: [212, 160, 23, 0.22],
-    setorGabungan: 'rgba(63,99,168,0.9)',
-    tarikGabungan: 'rgba(184,90,65,0.9)',
+    setor: '#C8930E', // emas
+    tarik: '#57606A', // abu arang
+    saldo: '#1F2328', // arang
+    // Gradasi isi area: warna seri -> transparan, opasitas rendah (F2c §0.2, R1 D.2).
+    isiSetor: [200, 147, 14, 0.18],
+    isiTarik: [87, 96, 106, 0.12],
+    isiSaldo: [31, 35, 40, 0.08],
+    setorGabungan: 'rgba(200,147,14,0.9)',
+    tarikGabungan: 'rgba(87,96,106,0.9)',
     pokok: '#1F2328',
     wajib: '#D4A017',
     sukarela: '#94A3B8',
@@ -69,7 +69,7 @@ const RUANG_ATAS_BATANG = 28;
 const FAKTOR_ATAS_BATANG = 1.18;
 const FAKTOR_ATAS = 1.08;
 
-Chart.defaults.font.family = "Inter, ui-sans-serif, system-ui, sans-serif";
+Chart.defaults.font.family = "'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif";
 
 // ---------------------------------------------------------------
 // Format angka. Tanda selalu ASCII: +Rp … / -Rp …, nol = Rp 0 (F1 §0).
@@ -549,11 +549,8 @@ function pasangGrafikArus(kanvas) {
 
         elemen.tab.forEach((tombol) => {
             const aktif = tombol.dataset.periode === keadaan.periode;
+            // R1 C.3: gaya tab garis bawah mengikuti aria-pressed (kelas aria-pressed:* di Blade).
             tombol.setAttribute('aria-pressed', aktif ? 'true' : 'false');
-            tombol.classList.toggle('bg-arang', aktif);
-            tombol.classList.toggle('text-white', aktif);
-            tombol.classList.toggle('text-stone-500', !aktif);
-            tombol.classList.toggle('hover:bg-stone-100', !aktif);
         });
 
         elemen.labelTampilan.textContent = TAMPILAN[keadaan.tampilan];

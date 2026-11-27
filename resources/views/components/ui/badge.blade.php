@@ -10,4 +10,4 @@
         'brand' => 'bg-emas-50 text-emas-700',
     ][$tone] ?? 'bg-stone-100 text-stone-700';
 @endphp
-<span {{ $attributes->merge(['class' => 'inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full '.$warna]) }}>{{ $slot }}</span>
+<span {{ $attributes->merge(['class' => 'inline-flex items-center text-xs font-medium px-2 py-0.5 rounded '.$warna]) }}>{{ $slot }}</span>

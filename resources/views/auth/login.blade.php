@@ -8,7 +8,7 @@
     $polaTitik = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18'%3E%3Ccircle cx='2' cy='2' r='1' fill='%23ffffff' fill-opacity='0.12'/%3E%3C/svg%3E\")";
 @endphp
 <x-guest-layout>
-    <div class="grid min-h-[560px] overflow-hidden rounded-3xl bg-white shadow-xl md:grid-cols-2">
+    <div class="grid min-h-[560px] overflow-hidden rounded-lg border border-stone-200 bg-white md:grid-cols-2">
         {{-- Kolom kiri: form, footer menempel ke bawah kartu. --}}
         <div class="flex flex-col px-8 pb-6 pt-10 sm:px-12">
             <div class="flex flex-1 flex-col justify-center">
@@ -44,7 +44,7 @@
                             <x-ui.input id="password" type="password" name="password" placeholder="Kata sandi" required autocomplete="current-password" x-bind:type="lihat ? 'text' : 'password'" pil ikon-kiri ruang-kanan />
                             <button type="button" data-lihat-kata-sandi x-on:click="lihat = ! lihat"
                                     aria-label="Tampilkan kata sandi" x-bind:aria-label="lihat ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'"
-                                    class="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-stone-500 hover:bg-stone-100 hover:text-stone-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-merah">
+                                    class="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-stone-500 hover:bg-stone-100 hover:text-stone-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-merah">
                                 <x-ui.icon name="eye" class="h-5 w-5" x-show="! lihat" />
                                 <x-ui.icon name="eye-slash" class="h-5 w-5" x-show="lihat" x-cloak />
                             </button>

@@ -28,7 +28,7 @@
                         @foreach ($jenisSimpanan as $jenis)
                             <label class="block cursor-pointer">
                                 <input type="radio" name="jenis_simpanan_id" value="{{ $jenis->id }}" class="peer sr-only" @checked((string) old('jenis_simpanan_id') === (string) $jenis->id)>
-                                <span class="block h-full rounded-xl border border-stone-200 bg-white p-4 transition-colors hover:border-stone-300 peer-checked:border-arang peer-checked:bg-stone-50 peer-checked:ring-1 peer-checked:ring-arang peer-focus-visible:ring-2 peer-focus-visible:ring-arang/30" data-kartu-jenis>
+                                <span class="block h-full rounded-md border border-stone-200 bg-white p-4 transition-colors hover:border-stone-300 peer-checked:border-arang peer-checked:bg-stone-50 peer-checked:ring-1 peer-checked:ring-arang peer-focus-visible:ring-2 peer-focus-visible:ring-arang/30" data-kartu-jenis>
                                     <span class="block text-sm font-semibold text-stone-900">{{ $jenis->nama_jenis }}</span>
                                     @if (filled($jenis->keterangan))
                                         <span class="mt-0.5 block text-xs text-stone-500" data-keterangan-jenis>{{ $jenis->keterangan }}</span>

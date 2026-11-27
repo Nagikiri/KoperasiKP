@@ -24,7 +24,7 @@
             <input type="hidden" name="kode_referensi" value="{{ $kodeReferensi }}">
             <x-ui.field-error name="kode_referensi" class="mb-4" />
 
-            <div role="note" class="mb-5 flex items-center gap-2.5 rounded-xl bg-sky-50 px-4 py-2.5 text-sm text-sky-700" data-info-tarik>
+            <div role="note" class="mb-5 flex items-center gap-2.5 rounded-md bg-sky-50 px-4 py-2.5 text-sm text-sky-700" data-info-tarik>
                 <x-ui.icon name="information-circle" class="h-5 w-5 shrink-0" />
                 <p>Penarikan hanya bisa dari saldo sukarela.</p>
             </div>
@@ -42,7 +42,7 @@
                 <div class="sm:col-span-2">
                     <p class="text-sm font-medium text-stone-700">Jenis simpanan</p>
                     <div class="mt-1.5 grid gap-3 sm:grid-cols-3">
-                        <div class="rounded-xl border border-arang bg-stone-50 px-4 py-2.5 ring-1 ring-arang" data-kartu-jenis-tarik>
+                        <div class="rounded-md border border-arang bg-stone-50 px-4 py-2.5 ring-1 ring-arang" data-kartu-jenis-tarik>
                             <span class="block text-sm font-semibold text-stone-900" data-jenis-tarik>{{ $jenisSukarela->nama_jenis }}</span>
                         </div>
                     </div>

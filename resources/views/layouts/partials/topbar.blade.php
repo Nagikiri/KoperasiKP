@@ -34,14 +34,14 @@
              x-on:click.outside="buka = false">
             <button type="button" x-ref="tombol" x-on:click="buka = ! buka"
                     aria-haspopup="menu" aria-controls="menu-akun" x-bind:aria-expanded="buka.toString()" aria-expanded="false"
-                    class="flex items-center gap-2.5 rounded-full py-1 pl-1 pr-2 transition-colors hover:bg-stone-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-merah focus-visible:ring-offset-2">
+                    class="flex items-center gap-2.5 rounded-md py-1 pl-1 pr-2 transition-colors hover:bg-stone-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-merah focus-visible:ring-offset-2">
                 <x-ui.avatar-initial :nama="$user->nama" tone="dark" />
                 <span class="text-sm font-medium text-stone-900">{{ $user->nama }}</span>
                 <x-ui.icon name="chevron-down" class="h-4 w-4 text-stone-500" />
             </button>
 
             <div id="menu-akun" x-cloak x-show="buka" x-transition.opacity.duration.100ms
-                 class="absolute right-0 z-40 mt-2 w-56 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg">
+                 class="absolute right-0 z-40 mt-2 w-56 overflow-hidden rounded-md border border-stone-300 bg-white py-1">
                 <div class="px-4 py-3">
                     <p class="truncate text-sm font-medium text-stone-900">{{ $user->nama }}</p>
                     <p class="truncate text-xs text-stone-500">{{ $user->username }}</p>

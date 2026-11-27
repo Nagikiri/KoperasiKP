@@ -31,7 +31,7 @@
                         @php($aktif = request()->routeIs($item['aktif']))
                         <li>
                             <a href="{{ route($item['route']) }}"@if ($aktif) aria-current="page"@endif
-                               class="flex h-10 items-center gap-3 rounded-xl px-3 text-sm transition-colors {{ $aktif ? 'bg-arang-700 text-white' : 'text-stone-300 hover:bg-arang-700 hover:text-white' }}">
+                               class="flex h-10 items-center gap-3 rounded-md px-3 text-sm transition-colors {{ $aktif ? 'bg-arang-700 text-white' : 'text-stone-300 hover:bg-arang-700 hover:text-white' }}">
                                 <x-ui.icon :name="$item['ikon']" class="h-5 w-5 shrink-0 {{ $aktif ? 'text-emas' : 'text-arang-400' }}" />
                                 <span class="truncate">{{ $item['label'] }}</span>
                             </a>

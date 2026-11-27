@@ -89,14 +89,14 @@
     @unless ($semua)
         <x-ui.label for="pilih-anggota" value="Anggota" />
     @endunless
-    {{-- Pemicu bergaya x-ui.input (h-11, rounded-xl, tepi stone-300), sama dengan kolom cari di sebelahnya di Riwayat. --}}
+    {{-- Pemicu bergaya x-ui.input (h-11, rounded-md, tepi stone-300), sama dengan kolom cari di sebelahnya di Riwayat. --}}
     <button type="button" id="pilih-anggota" x-ref="pemicu"
             x-on:click="buka ? tutup() : bukaPanel()"
             x-on:keydown.down.prevent="bukaPanel()"
             @if ($semua) aria-label="Anggota" @endif
             aria-haspopup="listbox" aria-controls="daftar-anggota" aria-expanded="false" x-bind:aria-expanded="buka.toString()"
             @class([
-                'flex h-11 w-full items-center justify-between gap-3 rounded-xl border bg-white px-3.5 text-left text-sm focus:border-arang focus:outline-none focus:ring-2 focus:ring-arang/20',
+                'flex h-11 w-full items-center justify-between gap-3 rounded-md border bg-white px-3.5 text-left text-sm focus:border-arang focus:outline-none focus:ring-2 focus:ring-arang/20',
                 'mt-1.5' => ! $semua,
                 'border-red-300' => $salah,
                 'border-stone-300' => ! $salah,
@@ -112,7 +112,7 @@
 
     <div x-cloak x-show="buka" x-transition.opacity.duration.100ms
          @class([
-             'absolute z-20 mt-2 overflow-hidden rounded-xl border border-stone-200 bg-white shadow-lg',
+             'absolute z-20 mt-2 overflow-hidden rounded-md border border-stone-300 bg-white',
              'inset-x-0' => ! $semua,
              'inset-x-0 md:left-auto md:w-[26rem]' => $semua,
          ])>

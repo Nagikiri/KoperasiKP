@@ -26,9 +26,9 @@
             $sebelumnya = $halaman;
         }
 
-        $kelasTombol = 'inline-flex h-9 min-w-9 items-center justify-center rounded-full px-2 text-sm font-medium tabular-nums';
+        $kelasTombol = 'inline-flex h-9 min-w-9 items-center justify-center rounded-md px-2 text-sm font-medium tabular-nums';
         $kelasTautan = $kelasTombol.' text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-arang/30';
-        $kelasPanah = 'inline-flex h-9 w-9 items-center justify-center rounded-full';
+        $kelasPanah = 'inline-flex h-9 w-9 items-center justify-center rounded-md';
     @endphp
     <nav role="navigation" aria-label="Navigasi halaman" data-pagination class="flex flex-wrap items-center justify-between gap-3">
         <p class="text-sm text-stone-500 tabular-nums">

@@ -35,13 +35,13 @@
                 <div class="relative" data-unduh-riwayat x-data="{ buka: false }"
                      x-on:keydown.escape.window="if (buka) { buka = false; $refs.pemicu.focus() }"
                      x-on:click.outside="buka = false">
-                    <x-ui.button variant="secondary" type="button" icon="document-arrow-down" x-ref="pemicu" x-on:click="buka = ! buka"
+                    <x-ui.button variant="secondary" type="button" x-ref="pemicu" x-on:click="buka = ! buka"
                                  aria-haspopup="menu" aria-controls="menu-unduh-riwayat" aria-expanded="false" x-bind:aria-expanded="buka.toString()">
                         Unduh
                         <x-ui.icon name="chevron-down" class="h-4 w-4 text-stone-500" />
                     </x-ui.button>
                     <div id="menu-unduh-riwayat" role="menu" aria-label="Unduh riwayat" x-cloak x-show="buka" x-transition.opacity.duration.100ms
-                         class="absolute right-0 z-30 mt-2 w-56 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg">
+                         class="absolute right-0 z-30 mt-2 w-56 overflow-hidden rounded-md border border-stone-300 bg-white py-1">
                         <a href="{{ route('transaksi.riwayat.excel', $queryUnduh) }}" role="menuitem" data-unduh="excel"
                            class="{{ $kelasItemUnduh }} text-stone-700 hover:bg-stone-50 focus:bg-stone-50 focus:outline-none">Excel (.xlsx)</a>
                         @if ($pdfTerlaluBanyak)
@@ -54,8 +54,8 @@
                     </div>
                 </div>
             @endif
-            <x-ui.button variant="secondary" :href="route('transaksi.setor.create')" icon="arrow-down-tray">Catat setoran</x-ui.button>
-            <x-ui.button variant="secondary" :href="route('transaksi.tarik.create')" icon="arrow-up-tray">Catat penarikan</x-ui.button>
+            <x-ui.button variant="secondary" :href="route('transaksi.setor.create')">Catat setoran</x-ui.button>
+            <x-ui.button variant="secondary" :href="route('transaksi.tarik.create')">Catat penarikan</x-ui.button>
         </x-slot:actions>
     </x-ui.page-header>
 
@@ -131,7 +131,7 @@
                  x-on:click.outside="tutup()">
                 <input type="hidden" name="anggota_id" value="{{ $anggotaFilter?->id }}" x-ref="anggota">
 
-                <div class="relative flex h-11 w-full items-center gap-2 rounded-xl border border-stone-300 bg-white pl-11 pr-3.5 text-sm focus-within:border-arang focus-within:ring-2 focus-within:ring-arang/20" data-isian-cari>
+                <div class="relative flex h-11 w-full items-center gap-2 rounded-md border border-stone-300 bg-white pl-11 pr-3.5 text-sm focus-within:border-arang focus-within:ring-2 focus-within:ring-arang/20" data-isian-cari>
                     <x-ui.icon name="magnifying-glass" class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
                     @if ($anggotaFilter)
                         <span class="inline-flex min-w-0 max-w-[70%] shrink-0 items-center gap-1 rounded-lg bg-stone-100 py-1 pl-2.5 pr-1 text-stone-900">
@@ -155,7 +155,7 @@
                 </div>
 
                 <div x-cloak x-show="buka" x-transition.opacity.duration.100ms
-                     class="absolute inset-x-0 z-20 mt-2 overflow-hidden rounded-xl border border-stone-200 bg-white shadow-lg">
+                     class="absolute inset-x-0 z-20 mt-2 overflow-hidden rounded-md border border-stone-300 bg-white">
                     <ul id="daftar-anggota-riwayat" role="listbox" aria-label="Daftar anggota" x-ref="daftar" class="max-h-72 overflow-y-auto py-1">
                         @foreach ([null, ...$anggotaList] as $anggota)
                             @php
@@ -179,13 +179,13 @@
             </div>
 
             <div class="flex flex-wrap items-center justify-between gap-2">
-                <fieldset class="inline-flex rounded-full border border-stone-200 bg-stone-50 p-0.5">
+                <fieldset class="flex gap-5 border-b border-stone-200" data-segmen-garis>
                     <legend class="sr-only">Jenis transaksi</legend>
                     @foreach ($segmen as $nilai => $teks)
                         <label class="cursor-pointer">
                             <input type="radio" name="jenis_transaksi" value="{{ $nilai }}" class="peer sr-only" @checked(($filter['jenis_transaksi'] ?? '') === $nilai)
                                    x-on:change="kirim()">
-                            <span class="inline-flex h-8 items-center rounded-full px-3 text-xs font-medium text-stone-500 transition-colors hover:text-stone-900 peer-checked:bg-arang peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-arang/30">{{ $teks }}</span>
+                            <span class="-mb-px inline-flex border-b-2 border-transparent pb-2 text-sm text-stone-500 transition-colors hover:text-stone-900 peer-checked:border-arang peer-checked:font-medium peer-checked:text-stone-900 peer-focus-visible:ring-2 peer-focus-visible:ring-arang/30">{{ $teks }}</span>
                         </label>
                     @endforeach
                 </fieldset>
@@ -202,7 +202,7 @@
                             <x-ui.icon name="chevron-down" class="h-4 w-4 text-stone-500" />
                         </x-ui.button>
                         <div id="menu-riwayat-transaksi-jenis" role="menu" aria-label="Jenis simpanan" x-cloak x-show="buka" x-transition.opacity.duration.100ms
-                             class="absolute right-0 z-10 mt-2 w-40 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg">
+                             class="absolute right-0 z-10 mt-2 w-40 overflow-hidden rounded-md border border-stone-300 bg-white py-1">
                             @foreach ($pilihanJenis as $nilai => $teks)
                                 <button type="button" role="menuitemradio" data-nilai="{{ $nilai }}" aria-checked="{{ (string) $nilai === $jenisAktif ? 'true' : 'false' }}"
                                         x-on:click="buka = false; $refs.nilai.value = @js((string) $nilai); kirim()" class="{{ $kelasOpsi }}">
@@ -224,7 +224,7 @@
                             <x-ui.icon name="chevron-down" class="h-4 w-4 text-stone-500" />
                         </x-ui.button>
                         <div id="menu-riwayat-transaksi-waktu" role="menu" aria-label="Rentang waktu" x-cloak x-show="buka" x-transition.opacity.duration.100ms
-                             class="absolute right-0 z-10 mt-2 w-44 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg">
+                             class="absolute right-0 z-10 mt-2 w-44 overflow-hidden rounded-md border border-stone-300 bg-white py-1">
                             @foreach ($pilihanWaktu as $nilai => $teks)
                                 <button type="button" role="menuitemradio" data-nilai="{{ $nilai }}" aria-checked="{{ (string) $nilai === $rentangAktif ? 'true' : 'false' }}"
                                         x-bind:aria-checked="(rentang === @js((string) $nilai)).toString()"
@@ -302,9 +302,9 @@
             <span class="mx-1.5 text-stone-300" aria-hidden="true">·</span>
             <span class="font-medium text-stone-900 tabular-nums" data-ringkasan-jumlah>{{ number_format($riwayat->total(), 0, ',', '.') }} transaksi</span>
             <span class="mx-1.5 text-stone-300" aria-hidden="true">·</span>
-            Setor <span class="font-medium text-setor tabular-nums" data-ringkasan-setor>{{ Format::rupiah($ringkasan['total_setor']) }}</span>
+            Setor <span class="font-medium text-setor-700 tabular-nums" data-ringkasan-setor>{{ Format::rupiah($ringkasan['total_setor']) }}</span>
             <span class="mx-1.5 text-stone-300" aria-hidden="true">·</span>
-            Tarik <span class="font-medium text-tarik tabular-nums" data-ringkasan-tarik>{{ Format::rupiah($ringkasan['total_tarik']) }}</span>
+            Tarik <span class="font-medium text-tarik-700 tabular-nums" data-ringkasan-tarik>{{ Format::rupiah($ringkasan['total_tarik']) }}</span>
             <span class="mx-1.5 text-stone-300" aria-hidden="true">·</span>
             Bersih <span @class([
                 'font-medium tabular-nums',
@@ -365,35 +365,19 @@
                         </thead>
                         <tbody>
                             @foreach ($riwayat as $transaksi)
-                                @php
-                                    $setor = $transaksi->jenis_transaksi === TransaksiSimpanan::SETOR;
-                                    $aktif = $transaksi->anggota->isAktif();
-                                @endphp
+                                @php $setor = $transaksi->jenis_transaksi === TransaksiSimpanan::SETOR; @endphp
                                 <tr class="group" data-transaksi="{{ $setor ? 'setor' : 'tarik' }}" data-id-transaksi="{{ $transaksi->id }}">
                                     <td class="sticky left-0 z-10 whitespace-nowrap bg-white group-hover:bg-stone-50 [[data-tergeser]_&]:shadow-[6px_0_8px_-6px_rgba(28,25,23,0.18)]" data-kolom-tempel>
-                                        {{-- Avatar sm + nama bertaut (garis bawah hanya saat hover) + baris no. anggota; nonaktif: "· ● Nonaktif" tanpa pil. --}}
-                                        <div class="flex items-center gap-3">
-                                            <x-ui.avatar-initial :nama="$transaksi->anggota->nama" size="sm" />
-                                            <div>
-                                                <a href="{{ route('anggota.show', $transaksi->anggota) }}" data-tautan-detail
-                                                   class="rounded-sm font-medium text-stone-900 underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-arang/30">{{ $transaksi->anggota->nama }}</a>
-                                                <div class="flex items-center gap-1.5 text-xs text-stone-500" data-baris-no-anggota>
-                                                    <span class="font-mono">{{ $transaksi->anggota->no_anggota }}</span>
-                                                    @unless ($aktif)
-                                                        <span aria-hidden="true">·</span>
-                                                        <span class="inline-flex items-center gap-1 text-stone-600" data-penanda-nonaktif><span aria-hidden="true" class="h-1.5 w-1.5 shrink-0 rounded-full bg-red-600"></span>Nonaktif</span>
-                                                    @endunless
-                                                </div>
-                                            </div>
-                                        </div>
+                                        {{-- Nama bertaut (garis bawah hanya saat hover) + baris no. anggota; nonaktif: "· ● Nonaktif" tanpa pil. Tanpa avatar (R1 C.6). --}}
+                                        <x-ui.sel-anggota :anggota="$transaksi->anggota" />
                                     </td>
                                     <td class="whitespace-nowrap" data-sel-tanggal>{{ Format::tanggal($transaksi->tanggal_transaksi) }}</td>
                                     <td class="whitespace-nowrap">
-                                        {{-- Pil bergaris tepi bergaya badge status anggota: titik setor/tarik, label, lalu jenis tanpa awalan "Simpanan ". --}}
-                                        <span class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-stone-300 bg-white px-2 py-0.5 text-[13px] leading-5 text-stone-800" data-pil-transaksi="{{ $setor ? 'setor' : 'tarik' }}"><span aria-hidden="true" class="h-1.5 w-1.5 shrink-0 rounded-full {{ $setor ? 'bg-setor' : 'bg-tarik' }}"></span><span class="font-medium">{{ $setor ? 'Setor' : 'Tarik' }}</span><span class="text-stone-500" data-pil-jenis>· {{ str_replace('Simpanan ', '', $transaksi->jenisSimpanan->nama_jenis) }}</span></span>
+                                        {{-- Pil cap (R1 C.5): titik setor/tarik, label, lalu jenis tanpa awalan "Simpanan ". --}}
+                                        <x-ui.pil-transaksi :jenis="$transaksi->jenis_transaksi" :nama-jenis="$transaksi->jenisSimpanan->nama_jenis" />
                                     </td>
                                     {{-- Tanda ASCII tanpa angka tabular supaya "-Rp" serapat "+Rp". --}}
-                                    <td class="num whitespace-nowrap font-medium {{ $setor ? 'text-setor' : 'text-tarik' }}" data-nominal><span class="normal-nums">{{ $setor ? '+' : '-' }}</span>{{ Format::rupiah($transaksi->jumlah) }}</td>
+                                    <td class="num whitespace-nowrap font-medium {{ $setor ? 'text-setor-700' : 'text-tarik-700' }}" data-nominal><span class="normal-nums">{{ $setor ? '+' : '-' }}</span>{{ Format::rupiah($transaksi->jumlah) }}</td>
                                     <td class="num whitespace-nowrap" data-saldo-jenis-ini>{{ Format::rupiah($transaksi->saldo_akhir) }}</td>
                                     <td class="whitespace-nowrap" data-sel-staf>{{ $transaksi->staff->nama }}</td>
                                     <td class="min-w-[16rem] whitespace-normal text-stone-500" data-sel-catatan>@if (filled($transaksi->keterangan))<span class="line-clamp-2 max-w-[22rem] break-words" title="{{ $transaksi->keterangan }}" data-catatan>{{ $transaksi->keterangan }}</span>@endif</td>

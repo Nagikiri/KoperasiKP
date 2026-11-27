@@ -198,7 +198,7 @@ class DashboardTest extends TestCase
 
         $xpath = $this->xpath($response->getContent());
         $nama = [];
-        foreach ($xpath->query('//*[@data-daftar-wajib="lalu"]//*[@data-belum-setor-wajib]/li//span[contains(@class,"font-medium")]') as $node) {
+        foreach ($xpath->query('//*[@data-daftar-wajib="lalu"]//*[@data-belum-setor-wajib]/li//a[@data-tautan-detail]') as $node) {
             $nama[] = trim($node->textContent);
         }
         $this->assertSame(['Belum Oktober', 'Gabung 31 Okt', 'Hanya Sukarela'], $nama);
@@ -267,7 +267,7 @@ class DashboardTest extends TestCase
             return [
                 trim($xpath->query('.//*[@data-jumlah-belum-setor]', $kartu)->item(0)->textContent),
                 trim(preg_replace('/\s+/', ' ', $xpath->query('.//*[@data-daftar-wajib]', $kartu)->item(0)->textContent)),
-                $xpath->query('.//*[@data-daftar-wajib]//svg[contains(@class,"text-setor")]', $kartu)->length,
+                $xpath->query('.//*[@data-daftar-wajib]//svg[contains(concat(" ", @class, " ")," text-setor-700 ")]', $kartu)->length,
             ];
         };
 
@@ -332,7 +332,7 @@ class DashboardTest extends TestCase
         $xpath = $this->xpath($response->getContent());
         $baris = [];
         foreach ($xpath->query('//*[@data-daftar-wajib="tunggakan_3"]//*[@data-belum-setor-wajib]/li') as $li) {
-            $baris[] = trim($xpath->query('.//span[contains(@class,"font-medium")]', $li)->item(0)->textContent)
+            $baris[] = trim($xpath->query('.//a[@data-tautan-detail]', $li)->item(0)->textContent)
                 .' | '.trim($xpath->query('.//*[@data-bolong]', $li)->item(0)->textContent);
         }
         $this->assertSame(['Budi | bolong 3 bulan', 'Andi | bolong 1 bulan', 'Citra | bolong 1 bulan'], $baris);
@@ -516,20 +516,21 @@ class DashboardTest extends TestCase
 
         $response = $this->actingAs($this->admin)->get(route('dashboard'))
             ->assertDontSee('Hari ini sudah ada 2 transaksi.');
-        // F2d I.5: "{n} anggota" menjadi tautan ke kartu; yang juga belum bulan lalu disebut.
+        // F2d I.5: "{n} anggota" menjadi tautan ke kartu; R1 F.1: tanpa tambahan "… juga belum bulan lalu".
         $xpath = $this->xpath($response->getContent());
         $kalimat = $xpath->query('//h1/following-sibling::p')->item(0);
-        $this->assertSame('Ada 1 anggota yang belum setor wajib bulan ini, 1 di antaranya juga belum bulan lalu.', trim(preg_replace('/\s+/', ' ', $kalimat->textContent)));
+        $this->assertSame('Ada 1 anggota yang belum setor wajib bulan ini.', trim(preg_replace('/\s+/', ' ', $kalimat->textContent)));
         $tautan = $xpath->query('.//a[@data-tautan-belum-wajib]', $kalimat)->item(0);
         $this->assertSame('#belum-setor-wajib', $tautan->getAttribute('href'));
         $this->assertSame('1 anggota', trim($tautan->textContent));
     }
 
-    public function test_kalimat_status_tetap_bulan_ini_dan_menyebut_yang_juga_belum_bulan_lalu(): void
+    public function test_kalimat_status_tetap_bulan_ini_tanpa_menyebut_bulan_lalu(): void
     {
+        // R1 F.1: kalimat cukup "Ada {n anggota} yang belum setor wajib bulan ini."; tidak pernah menyebut bulan lalu.
         $lama = Anggota::factory()->count(3)->create(['tanggal_bergabung' => '2026-01-01']);
-        Anggota::factory()->create(['tanggal_bergabung' => '2026-11-03']); // baru: belum bulan ini, tidak dihitung bulan lalu
-        // Satu anggota lama sudah setor wajib bulan lalu -> hanya 2 yang juga belum bulan lalu.
+        Anggota::factory()->create(['tanggal_bergabung' => '2026-11-03']); // baru: belum bulan ini
+        // Satu anggota lama sudah setor wajib bulan lalu; dua lainnya belum bulan ini maupun bulan lalu.
         $this->buatTransaksi($lama[0], JenisSimpanan::WAJIB, TransaksiSimpanan::SETOR, 50000, '2026-10-05');
 
         $kalimat = function (array $parameter = []): string {
@@ -538,16 +539,16 @@ class DashboardTest extends TestCase
             return trim(preg_replace('/\s+/', ' ', $xpath->query('//h1/following-sibling::p')->item(0)->textContent));
         };
 
-        $harapan = 'Ada 4 anggota yang belum setor wajib bulan ini, 2 di antaranya juga belum bulan lalu.';
+        $harapan = 'Ada 4 anggota yang belum setor wajib bulan ini.';
         $this->assertSame($harapan, $kalimat());
         // Pilihan di kartu tidak mengubah kalimat status (I.5.1).
         $this->assertSame($harapan, $kalimat(['wajib' => 'tunggakan_6']));
         $this->assertSame($harapan, $kalimat(['wajib' => 'lalu']));
+        $this->assertStringNotContainsString('bulan lalu', $kalimat());
 
-        // Semua anggota lama sudah setor wajib bulan lalu -> tanpa tambahan.
-        $this->buatTransaksi($lama[1], JenisSimpanan::WAJIB, TransaksiSimpanan::SETOR, 50000, '2026-10-06');
-        $this->buatTransaksi($lama[2], JenisSimpanan::WAJIB, TransaksiSimpanan::SETOR, 50000, '2026-10-07');
-        $this->assertSame('Ada 4 anggota yang belum setor wajib bulan ini.', $kalimat());
+        // Satu anggota setor wajib bulan ini -> jumlah turun, kalimat tetap tanpa tambahan.
+        $this->buatTransaksi($lama[1], JenisSimpanan::WAJIB, TransaksiSimpanan::SETOR, 50000, '2026-11-06');
+        $this->assertSame('Ada 3 anggota yang belum setor wajib bulan ini.', $kalimat());
     }
 
     public function test_data_komposisi_berisi_tiga_jenis_saat_saldo_lebih_dari_nol(): void
@@ -576,13 +577,19 @@ class DashboardTest extends TestCase
             $this->assertStringContainsString($teks, $daftar);
         }
         $this->assertStringNotContainsString('Simpanan', $daftar);
-        // F2d D.1: tengah donat = jenis terbesar (bukan total lagi); total pindah ke baris Total (D.3).
+        // F2d D.1: tengah donat = jenis terbesar. R1 F.2.1: total di kepala kartu ("Total simpanan" + nominal text-2xl);
+        // baris Total di bawah daftar jenis dihapus, dan daftar jenis tanpa garis antarbaris (F.2.3).
         $this->assertSame('75,0%', $this->teksDi($xpath, '//*[@data-komposisi-tengah]/*[@data-tengah-persen]'));
         $this->assertSame('Sukarela', $this->teksDi($xpath, '//*[@data-komposisi-tengah]/*[@data-tengah-nama]'));
-        $this->assertSame('Total 100% Rp 400.000', $this->teksDi($xpath, '//*[@data-komposisi-total]'));
-        $kartu = $xpath->query('//*[@data-kartu-komposisi]')->item(0)->textContent;
-        $this->assertStringNotContainsString('Total simpanan', $kartu);
-        $this->assertStringNotContainsString('Total saldo', $kartu);
+        $this->assertSame('Total simpanan Rp 400.000', $this->teksDi($xpath, '//*[@data-komposisi-total]'));
+        $nominalTotal = $xpath->query('//*[@data-komposisi-total]/p[2]')->item(0);
+        foreach (['text-2xl', 'font-semibold', 'tabular-nums'] as $kelas) {
+            $this->assertContains($kelas, explode(' ', $nominalTotal->getAttribute('class')), $kelas);
+        }
+        $this->assertSame(0, $xpath->query('//*[@data-kartu-komposisi]//*[contains(@class, "text-2xl")][not(ancestor-or-self::*[@data-komposisi-total])]')->length, 'Hanya Total yang paling besar.');
+        $this->assertSame(0, $xpath->query('//*[@data-daftar-komposisi]/following-sibling::*[normalize-space(.)="Total"] | //*[@data-kartu-komposisi]//*[starts-with(normalize-space(.), "Total 100%")]')->length, 'Baris Total lama dihapus.');
+        $this->assertStringNotContainsString('divide-y', $xpath->query('//*[@data-daftar-komposisi]')->item(0)->getAttribute('class'));
+        $this->assertStringNotContainsString('Total saldo', $xpath->query('//*[@data-kartu-komposisi]')->item(0)->textContent);
     }
 
     public function test_ringkasan_sebaran_set_pertama_mengikuti_data_dan_kelompok_saldo_sama_dengan_total(): void
@@ -618,18 +625,20 @@ class DashboardTest extends TestCase
         );
 
         $xpath = $this->xpath($response->getContent());
-        $this->assertSame('Total 100% Rp 600.000', $this->teksDi($xpath, '//*[@data-komposisi-total]'));
+        $this->assertSame('Total simpanan Rp 600.000', $this->teksDi($xpath, '//*[@data-komposisi-total]'));
         $this->assertSame([
-            'bisa_ditarik' => 'Bisa ditarik anggota Rp 350.000',
-            'tertahan' => 'Tertahan (pokok + wajib) Rp 150.000',
+            'bisa_ditarik' => 'Bisa ditarik Rp 350.000',
+            'tertahan' => 'Tertahan (anggota aktif) Rp 150.000',
             'milik_nonaktif' => 'Milik anggota nonaktif Rp 100.000',
             'rata_rata_aktif' => 'Rata-rata per anggota aktif Rp 250.000',
-            'wajib_masuk_bulan_ini' => 'Wajib masuk bulan ini Rp 50.000 1 dari 2 anggota',
+            'wajib_masuk_bulan_ini' => 'Wajib masuk bulan ini Rp 50.000 1 dari 2 sudah setor 1 belum setor →',
         ], $this->barisRingkasanSebaran($xpath));
 
-        // Dua kelompok dipisah garis putus-putus; baris lama dihapus.
-        $this->assertSame(['saldo', 'anggota'], array_map(fn ($n) => $n->getAttribute('data-ringkasan-kelompok'), iterator_to_array($xpath->query('//*[@data-komposisi-ringkasan]/dl'))));
-        $this->assertSame(1, $xpath->query('//*[@data-komposisi-ringkasan]/*[contains(@class,"border-dashed")]')->length);
+        // R1 F.2.4/F.2.6: dua kelompok berjudul kecil (Kondisi saldo, Informasi anggota), tanpa garis putus-putus.
+        $this->assertSame(['saldo', 'anggota'], array_map(fn ($n) => $n->getAttribute('data-ringkasan-kelompok'), iterator_to_array($xpath->query('//*[@data-komposisi-ringkasan]/section'))));
+        $this->assertSame('Kondisi saldo', $this->teksDi($xpath, '//*[@data-kondisi-saldo]/h3'));
+        $this->assertSame('Informasi anggota', $this->teksDi($xpath, '//*[@data-info-anggota]/h3'));
+        $this->assertSame(0, $xpath->query('//*[@data-komposisi-ringkasan]//*[contains(@class,"border-dashed")]')->length);
         $teks = $xpath->query('//*[@data-kartu-komposisi]')->item(0)->textContent;
         $this->assertStringNotContainsString('Terkecil', $teks);
         $this->assertStringNotContainsString('Selisih', $teks);
@@ -655,12 +664,12 @@ class DashboardTest extends TestCase
         ]);
 
         $xpath = $this->xpath($response->getContent());
-        $this->assertSame('Total 100% Rp 1.020.000', $this->teksDi($xpath, '//*[@data-komposisi-total]'));
+        $this->assertSame('Total simpanan Rp 1.020.000', $this->teksDi($xpath, '//*[@data-komposisi-total]'));
         $this->assertSame([
-            'bisa_ditarik' => 'Bisa ditarik anggota Rp 1.000.000',
-            'tertahan' => 'Tertahan (pokok + wajib) Rp 20.000',
+            'bisa_ditarik' => 'Bisa ditarik Rp 1.000.000',
+            'tertahan' => 'Tertahan (anggota aktif) Rp 20.000',
             'rata_rata_aktif' => 'Rata-rata per anggota aktif Rp 510.000',
-            'wajib_masuk_bulan_ini' => 'Wajib masuk bulan ini Rp 0 0 dari 2 anggota',
+            'wajib_masuk_bulan_ini' => 'Wajib masuk bulan ini Rp 0 0 dari 2 sudah setor 2 belum setor →',
         ], $this->barisRingkasanSebaran($xpath));
     }
 
@@ -671,12 +680,14 @@ class DashboardTest extends TestCase
 
         $xpath = $this->xpath($this->actingAs($this->admin)->get(route('dashboard'))->getContent());
 
+        // Tanpa anggota aktif: kotak rata-rata disembunyikan, tautan "belum setor" tidak ada (0).
         $this->assertSame([
-            'bisa_ditarik' => 'Bisa ditarik anggota Rp 0',
-            'tertahan' => 'Tertahan (pokok + wajib) Rp 0',
+            'bisa_ditarik' => 'Bisa ditarik Rp 0',
+            'tertahan' => 'Tertahan (anggota aktif) Rp 0',
             'milik_nonaktif' => 'Milik anggota nonaktif Rp 40.000',
-            'wajib_masuk_bulan_ini' => 'Wajib masuk bulan ini Rp 0 0 dari 0 anggota',
+            'wajib_masuk_bulan_ini' => 'Wajib masuk bulan ini Rp 0 0 dari 0 sudah setor',
         ], $this->barisRingkasanSebaran($xpath));
+        $this->assertSame(0, $xpath->query('//*[@data-tautan-wajib-belum]')->length);
     }
 
     public function test_sebaran_seri_memilih_id_lebih_kecil_dan_tanpa_ringkasan_saat_total_nol(): void
@@ -689,12 +700,12 @@ class DashboardTest extends TestCase
         $xpath = $this->xpath($this->actingAs($this->admin)->get(route('dashboard'))->getContent());
         $this->assertSame('Pokok', $this->teksDi($xpath, '//*[@data-tengah-nama]'));
 
-        // Total 0: donat, tengah, dan ringkasan tidak dirender; baris Total tetap Rp 0.
+        // Total 0: donat, tengah, dan ringkasan tidak dirender; kepala Total tetap Rp 0 (R1 F.2.1).
         TransaksiSimpanan::query()->delete();
         $xpath = $this->xpath($this->actingAs($this->admin)->get(route('dashboard'))->getContent());
         $this->assertSame(0, $xpath->query('//*[@data-komposisi-tengah]')->length);
         $this->assertSame(0, $xpath->query('//*[@data-komposisi-ringkasan]')->length);
-        $this->assertSame('Total Rp 0', $this->teksDi($xpath, '//*[@data-komposisi-total]'));
+        $this->assertSame('Total simpanan Rp 0', $this->teksDi($xpath, '//*[@data-komposisi-total]'));
     }
 
     public function test_kepala_grafik_kontrol_satu_baris_kotak_dan_kaki_grafik(): void
@@ -995,8 +1006,9 @@ class DashboardTest extends TestCase
         ], $this->rincianKartu($html, 'anggota'));
     }
 
-    public function test_transaksi_terbaru_menampilkan_ikon_label_tanda_dan_nama_staff(): void
+    public function test_transaksi_terbaru_pil_transaksi_label_tanda_tanpa_nama_staff(): void
     {
+        // R1 E.3: kolom Anggota | Tanggal | Transaksi (pil seperti Riwayat) | Jumlah; tanpa kotak ikon dan tanpa "oleh {staf}".
         $this->admin->update(['nama' => 'Siti Petugas']);
         $anggota = Anggota::factory()->create(['nama' => 'Budi Santoso', 'no_anggota' => 'KSP-2026-0007']);
         $this->buatTransaksi($anggota, JenisSimpanan::WAJIB, TransaksiSimpanan::SETOR, 50000, '2026-11-10');
@@ -1013,21 +1025,29 @@ class DashboardTest extends TestCase
         $barisSetor = $setor->item(0)->ownerDocument->saveHTML($setor->item(0));
         $barisTarik = $tarik->item(0)->ownerDocument->saveHTML($tarik->item(0));
 
-        $this->assertStringContainsString('bg-setor-50', $barisSetor);
-        $this->assertStringContainsString('<svg', $barisSetor);
-        $this->assertMatchesRegularExpression('/>\s*Setor\s*</', $barisSetor);
-        $this->assertStringContainsString(JenisSimpanan::WAJIB, $barisSetor);
-        $this->assertStringContainsString('+Rp 50.000', $barisSetor);
+        $this->assertSame(['Anggota', 'Tanggal', 'Transaksi', 'Jumlah'], array_map(
+            fn ($th) => trim($th->textContent),
+            iterator_to_array($xpath->query('//tr[@data-transaksi]/ancestor::table/thead//th'))
+        ));
 
-        $this->assertStringContainsString('bg-tarik-50', $barisTarik);
-        $this->assertMatchesRegularExpression('/>\s*Tarik\s*</', $barisTarik);
-        $this->assertStringContainsString('-Rp 15.000', $barisTarik);
+        foreach (['setor' => [$setor, 'Setor', 'Wajib', 'bg-setor', '+Rp 50.000', 'text-setor-700'], 'tarik' => [$tarik, 'Tarik', 'Sukarela', 'bg-tarik', '-Rp 15.000', 'text-tarik-700']] as $jenis => [$tr, $label, $namaJenis, $titik, $nominal, $warna]) {
+            $baris = $tr->item(0);
+            $pil = $xpath->query('./td[3]//*[@data-pil-transaksi="'.$jenis.'"]', $baris);
+            $this->assertSame(1, $pil->length, $jenis);
+            $this->assertSame("{$label}· {$namaJenis}", trim(preg_replace('/\s+/', ' ', $pil->item(0)->textContent)));
+            $this->assertContains($titik, explode(' ', $xpath->query('./span[@aria-hidden="true"]', $pil->item(0))->item(0)->getAttribute('class')));
+            $this->assertSame(0, $xpath->query('.//*[local-name()="svg"]', $baris)->length, 'Tanpa kotak ikon.');
 
-        foreach ([$barisSetor, $barisTarik] as $baris) {
-            $this->assertStringContainsString('Budi Santoso', $baris);
-            $this->assertStringContainsString('KSP-2026-0007', $baris);
-            $this->assertStringContainsString('oleh Siti Petugas', $baris);
+            $this->assertSame('Budi Santoso', trim($xpath->query('./td[1]//a[@data-tautan-detail]', $baris)->item(0)->textContent));
+            $this->assertSame('KSP-2026-0007', trim($xpath->query('./td[1]//*[@data-baris-no-anggota]', $baris)->item(0)->textContent));
+            $this->assertSame(0, $xpath->query('./td[1]//span[@aria-hidden="true"][contains(@class, "w-9")]', $baris)->length, 'Tanpa avatar.');
+
+            $sel = $xpath->query('./td[4][@data-nominal]', $baris)->item(0);
+            $this->assertSame($nominal, trim($sel->textContent));
+            $this->assertContains($warna, explode(' ', $sel->getAttribute('class')));
         }
+
+        $this->assertStringNotContainsString('Siti Petugas', $barisSetor.$barisTarik);
     }
 
     public function test_tautan_catat_belum_setor_wajib_ke_form_setor_dengan_anggota_benar(): void
@@ -1041,7 +1061,7 @@ class DashboardTest extends TestCase
         foreach ($xpath->query('//*[@data-daftar-wajib="ini"]//*[@data-belum-setor-wajib]//li') as $baris) {
             $tautan = $xpath->query('.//a[normalize-space()="Catat"]', $baris)->item(0);
             $this->assertNotNull($tautan, 'Setiap baris belum setor wajib punya tautan "Catat".');
-            $catat[trim($xpath->query('.//span[contains(@class,"font-medium")]', $baris)->item(0)->textContent)] = $tautan->getAttribute('href');
+            $catat[trim($xpath->query('.//a[@data-tautan-detail]', $baris)->item(0)->textContent)] = $tautan->getAttribute('href');
         }
 
         $this->assertSame([
@@ -1185,7 +1205,9 @@ class DashboardTest extends TestCase
     {
         $hasil = [];
         foreach ($xpath->query('//*[@data-komposisi-ringkasan]//*[@data-ringkasan-baris]') as $baris) {
-            $hasil[$baris->getAttribute('data-ringkasan-baris')] = trim(preg_replace('/\s+/', ' ', $baris->textContent));
+            // R1 F.2.5: isi popover ⓘ (role="tooltip") tidak ikut teks baris; diuji terpisah.
+            $teks = implode(' ', array_map(fn ($node) => $node->nodeValue, iterator_to_array($xpath->query('.//text()[not(ancestor::*[@role="tooltip"])]', $baris))));
+            $hasil[$baris->getAttribute('data-ringkasan-baris')] = trim(preg_replace('/\s+/', ' ', $teks));
         }
 
         return $hasil;

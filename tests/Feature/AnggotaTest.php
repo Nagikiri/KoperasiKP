@@ -864,7 +864,7 @@ class AnggotaTest extends TestCase
         $this->assertSame(0, $xpath->query('//*[@data-kartu-saldo]/div[1]//*[@data-total-saldo]')->length);
         $this->assertSame('Rp 100.000', trim($xpath->query('//*[@data-kartu-saldo]/div[2]//*[@data-total-saldo]')->item(0)->textContent));
         $this->assertStringContainsString('Total saldo', $xpath->query('//*[@data-kartu-saldo]/div[2]')->item(0)->textContent);
-        $this->assertSame(3, $xpath->query('//*[@data-saldo-jenis][contains(@class, "rounded-xl")][contains(@class, "border-stone-200")][contains(@class, "bg-stone-50/60")]')->length);
+        $this->assertSame(3, $xpath->query('//*[@data-saldo-jenis][contains(@class, "rounded-md")][contains(@class, "border-stone-200")][contains(@class, "bg-stone-50/60")]')->length);
     }
 
     public function test_detail_identitas_berurutan_dengan_label_ikon_dan_nilai(): void
@@ -1088,8 +1088,8 @@ class AnggotaTest extends TestCase
         $oktober->assertViewHas('ringkasanRiwayat', ['total_setor' => 300000.0, 'total_tarik' => 40000.0]);
 
         $xpath = $this->xpath($oktober->getContent());
-        $this->assertSame('Rp 300.000', trim($xpath->query('//*[@data-ringkasan-riwayat]//*[@data-ringkasan-setor][contains(@class, "text-setor")]')->item(0)->textContent));
-        $this->assertSame('Rp 40.000', trim($xpath->query('//*[@data-ringkasan-riwayat]//*[@data-ringkasan-tarik][contains(@class, "text-tarik")]')->item(0)->textContent));
+        $this->assertSame('Rp 300.000', trim($xpath->query('//*[@data-ringkasan-riwayat]//*[@data-ringkasan-setor][contains(concat(" ", @class, " "), " text-setor-700 ")]')->item(0)->textContent));
+        $this->assertSame('Rp 40.000', trim($xpath->query('//*[@data-ringkasan-riwayat]//*[@data-ringkasan-tarik][contains(concat(" ", @class, " "), " text-tarik-700 ")]')->item(0)->textContent));
 
         $this->actingAs($this->admin)->get(route('anggota.show', [$anggota, 'jenis_transaksi' => 'tarik']))
             ->assertViewHas('ringkasanRiwayat', ['total_setor' => 0.0, 'total_tarik' => 50000.0]);

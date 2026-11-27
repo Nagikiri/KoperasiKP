@@ -60,7 +60,7 @@
                             <p class="text-sm font-medium text-stone-700">Nomor anggota</p>
                             <p class="mt-1.5 flex h-11 items-center font-mono text-sm text-stone-900" data-nomor-anggota>{{ $anggota->no_anggota }}</p>
                         @else
-                            <div class="flex items-start gap-2 rounded-xl bg-stone-50 px-3.5 py-3 text-sm text-stone-600 lg:mt-6">
+                            <div class="flex items-start gap-2 rounded-md bg-stone-50 px-3.5 py-3 text-sm text-stone-600 lg:mt-6">
                                 <x-ui.icon name="information-circle" class="mt-0.5 h-4 w-4 shrink-0 text-stone-400" />
                                 <p>Nomor anggota dibuat otomatis oleh sistem.</p>
                             </div>

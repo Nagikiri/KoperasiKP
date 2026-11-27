@@ -4,7 +4,7 @@
 --}}
 @if ($paginator->hasPages())
     @php
-        $kelasPanah = 'inline-flex h-9 w-9 items-center justify-center rounded-full';
+        $kelasPanah = 'inline-flex h-9 w-9 items-center justify-center rounded-md';
         $kelasAktif = $kelasPanah.' text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-arang/30';
     @endphp
     <nav role="navigation" aria-label="Navigasi halaman" data-pagination class="flex items-center justify-end gap-1">

@@ -91,7 +91,15 @@ class TampilanAnggotaNonaktifTest extends TestCase
 
     public function test_dashboard_transaksi_terbaru_menandai_nonaktif(): void
     {
-        $this->assertMatchesRegularExpression('/Andi Pratama Wijaya '.self::PENANDA.'/', $this->html(route('dashboard')));
+        // R1 E.1: sel anggota seperti Riwayat; nama lengkap tetap tampil, penanda di baris nomor ("KSP-… · ● Nonaktif").
+        $html = $this->html(route('dashboard'));
+        $this->assertSame(1, preg_match('/id="transaksi-terbaru".*?id="belum-setor-wajib"/s', $html, $kartu));
+        $this->assertMatchesRegularExpression('/data-tautan-detail[^>]*>Andi Pratama Wijaya<\/a>/', $kartu[0]);
+        $this->assertMatchesRegularExpression(
+            '/'.preg_quote($this->andi->no_anggota, '/').'<\/span>\s*<span aria-hidden="true">·<\/span>\s*<span[^>]*text-stone-600[^>]*data-penanda-nonaktif><span[^>]*bg-red-600[^>]*><\/span>Nonaktif<\/span>/',
+            $kartu[0]
+        );
+        $this->assertDoesNotMatchRegularExpression('/'.self::PENANDA.'/', $kartu[0]);
     }
 
     public function test_laporan_keseluruhan_pratinjau_dan_pdf_menandai_nonaktif(): void

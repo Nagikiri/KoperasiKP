@@ -9,7 +9,7 @@
         @method('PATCH')
 
         <div class="flex items-start gap-4">
-            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-700">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-red-50 text-red-700">
                 <x-ui.icon name="no-symbol" class="w-5 h-5" />
             </span>
             <div>

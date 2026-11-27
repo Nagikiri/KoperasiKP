@@ -1,6 +1,6 @@
 {{--
     Modal Breeze (Alpine), dirapikan di F3 H.3.1: elemen terluar menggabungkan $attributes
-    (jangkar test seperti data-modal-nonaktifkan), latar arang/40, panel rounded-2xl berbayangan tipis, lebar default md.
+    (jangkar test seperti data-modal-nonaktifkan), latar arang/40, panel rounded-lg tanpa bayangan (R1 C.1, C.2), lebar default md.
 --}}
 @props([
     'name',
@@ -69,7 +69,7 @@ $maxWidth = [
 
     <div
         x-show="show"
-        class="mb-6 mt-24 bg-white border border-stone-200 rounded-2xl overflow-hidden shadow-[0_1px_2px_rgba(28,25,23,0.04),0_2px_6px_rgba(28,25,23,0.04)] transform transition-all sm:w-full {{ $maxWidth }} sm:mx-auto"
+        class="mb-6 mt-24 bg-white border border-stone-200 rounded-lg overflow-hidden transform transition-all sm:w-full {{ $maxWidth }} sm:mx-auto"
         x-transition:enter="ease-out duration-300"
         x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
         x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"

@@ -5,7 +5,7 @@
 @props(['jenis', 'namaJenis'])
 @php $setor = $jenis === \App\Models\TransaksiSimpanan::SETOR; @endphp
 <div class="flex items-center gap-3">
-    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg {{ $setor ? 'bg-setor-50 text-setor' : 'bg-tarik-50 text-tarik' }}">
+    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg {{ $setor ? 'bg-setor-50 text-setor-700' : 'bg-tarik-50 text-tarik-700' }}">
         <x-ui.icon :name="$setor ? 'arrow-down-tray' : 'arrow-up-tray'" class="w-5 h-5" />
     </span>
     <div class="min-w-0">

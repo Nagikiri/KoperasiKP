@@ -9,7 +9,7 @@
     $kecil = $size === 'sm';
     $kelasLabel = $titik ? 'flex items-center gap-2 text-sm text-stone-600' : 'text-sm text-stone-600';
 @endphp
-<div {{ $attributes->merge(['class' => 'bg-white border border-stone-200 rounded-2xl '.($kecil ? 'px-5 py-4' : 'p-5').' shadow-[0_1px_2px_rgba(28,25,23,0.04),0_2px_6px_rgba(28,25,23,0.04)]']) }}>
+<div {{ $attributes->merge(['class' => 'bg-white border border-stone-200 rounded-lg '.($kecil ? 'px-5 py-4' : 'p-5')]) }}>
     <p class="{{ $kelasLabel }}">@if ($titik)<span aria-hidden="true" class="h-1.5 w-1.5 shrink-0 rounded-full {{ $titik }}" data-titik-stat></span>@endif{{ $label }}</p>
     <p class="mt-1 whitespace-nowrap {{ $kecil ? 'text-xl' : 'text-[28px]' }} font-semibold leading-tight tracking-tight text-stone-900 tabular-nums">{{ $value }}</p>
     @if (count($rincian))

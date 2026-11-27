@@ -520,12 +520,13 @@ class LaporanTest extends TestCase
             ksort($harapan);
             $this->assertSame($harapan, $parameter);
 
-            // Komponen x-ui.button secondary (bukan kelas Breeze), berikon, di actions header.
+            // Komponen x-ui.button secondary (bukan kelas Breeze) di actions header; R1 B.3/C.1: sudut rounded-md, tanpa ikon.
             $kelas = $tombol->item(0)->getAttribute('class');
-            $this->assertStringContainsString('rounded-full', $kelas);
+            $this->assertStringContainsString('rounded-md', $kelas);
+            $this->assertStringNotContainsString('rounded-full', $kelas);
             $this->assertStringContainsString('border-stone-300', $kelas);
             $this->assertStringNotContainsString('bg-gray-800', $kelas);
-            $this->assertSame(1, $xpath->query('//a[@data-tombol-unduh="'.$jenis.'"]/*[local-name()="svg"]')->length);
+            $this->assertSame(0, $xpath->query('//a[@data-tombol-unduh="'.$jenis.'"]//*[local-name()="svg"]')->length);
         }
         $this->assertSame(0, $xpath->query('//*[@data-pratinjau-laporan]//*[@data-tombol-unduh]')->length);
     }

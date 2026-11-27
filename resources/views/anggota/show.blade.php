@@ -27,14 +27,14 @@
             @if ($aktif)
                 <x-ui.button variant="danger" type="button" icon="no-symbol"
                              x-on:click="$dispatch('open-modal', 'nonaktifkan-{{ $anggota->id }}')">Nonaktifkan</x-ui.button>
-                <x-ui.button :href="route('transaksi.setor.create', ['anggota_id' => $anggota->id])" icon="arrow-down-tray">Catat setoran</x-ui.button>
+                <x-ui.button :href="route('transaksi.setor.create', ['anggota_id' => $anggota->id])">Catat setoran</x-ui.button>
             @endif
         </x-slot:actions>
     </x-ui.page-header>
 
     {{-- F3 H.1.2 / BR-21: nonaktif dengan saldo > 0 → banner di atas konten, teks tepat satu kali. --}}
     @if (Anggota::perluKeteranganSaldo($anggota->status, $totalSaldo))
-        <div data-keterangan-saldo-nonaktif role="note" class="mb-6 flex items-start gap-3 rounded-xl border border-emas/30 bg-emas-50 px-4 py-3 text-sm text-emas-700">
+        <div data-keterangan-saldo-nonaktif role="note" class="mb-6 flex items-start gap-3 rounded-md border border-emas/30 bg-emas-50 px-4 py-3 text-sm text-emas-700">
             <x-ui.icon name="exclamation-triangle" class="h-5 w-5 shrink-0" />
             <p>{{ Anggota::KETERANGAN_SALDO_NONAKTIF }}</p>
         </div>
@@ -55,7 +55,7 @@
 
             <div class="mt-6 grid flex-1 gap-3 sm:grid-cols-3">
                 @foreach ($saldoPerJenis as $saldo)
-                    <div class="flex flex-col justify-center rounded-xl border border-stone-200 bg-stone-50/60 px-5 py-5" data-saldo-jenis>
+                    <div class="flex flex-col justify-center rounded-md border border-stone-200 bg-stone-50/60 px-5 py-5" data-saldo-jenis>
                         <p class="text-xs text-stone-500">{{ $saldo['nama_jenis'] }}</p>
                         <p class="mt-1.5 whitespace-nowrap text-lg font-semibold text-stone-900 tabular-nums">{{ Format::rupiah($saldo['saldo']) }}</p>
                     </div>
@@ -124,13 +124,13 @@
                   }"
                   class="space-y-3 border-b border-stone-200 px-6 py-3">
                 <div class="flex flex-wrap items-center justify-between gap-2">
-                    <fieldset class="inline-flex rounded-full border border-stone-200 bg-stone-50 p-0.5">
+                    <fieldset class="flex gap-5 border-b border-stone-200" data-segmen-garis>
                         <legend class="sr-only">Jenis transaksi</legend>
                         @foreach ($segmenRiwayat as $nilai => $teks)
                             <label class="cursor-pointer">
                                 <input type="radio" name="jenis_transaksi" value="{{ $nilai }}" class="peer sr-only" @checked(($filterRiwayat['jenis_transaksi'] ?? '') === $nilai)
                                        x-on:change="kirim()">
-                                <span class="inline-flex h-8 items-center rounded-full px-3 text-xs font-medium text-stone-500 transition-colors hover:text-stone-900 peer-checked:bg-arang peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-arang/30">{{ $teks }}</span>
+                                <span class="-mb-px inline-flex border-b-2 border-transparent pb-2 text-sm text-stone-500 transition-colors hover:text-stone-900 peer-checked:border-arang peer-checked:font-medium peer-checked:text-stone-900 peer-focus-visible:ring-2 peer-focus-visible:ring-arang/30">{{ $teks }}</span>
                             </label>
                         @endforeach
                     </fieldset>
@@ -147,7 +147,7 @@
                                 <x-ui.icon name="chevron-down" class="h-4 w-4 text-stone-500" />
                             </x-ui.button>
                             <div id="menu-riwayat-jenis" role="menu" aria-label="Jenis simpanan" x-cloak x-show="buka" x-transition.opacity.duration.100ms
-                                 class="absolute right-0 z-10 mt-2 w-40 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg">
+                                 class="absolute right-0 z-10 mt-2 w-40 overflow-hidden rounded-md border border-stone-300 bg-white py-1">
                                 @foreach ($pilihanJenis as $nilai => $teks)
                                     <button type="button" role="menuitemradio" data-nilai="{{ $nilai }}" aria-checked="{{ (string) $nilai === (string) ($filterRiwayat['jenis_simpanan_id'] ?? '') ? 'true' : 'false' }}"
                                             x-on:click="buka = false; $refs.nilai.value = @js((string) $nilai); kirim()" class="{{ $kelasOpsi }}">
@@ -169,7 +169,7 @@
                                 <x-ui.icon name="chevron-down" class="h-4 w-4 text-stone-500" />
                             </x-ui.button>
                             <div id="menu-riwayat-waktu" role="menu" aria-label="Rentang waktu" x-cloak x-show="buka" x-transition.opacity.duration.100ms
-                                 class="absolute right-0 z-10 mt-2 w-44 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg">
+                                 class="absolute right-0 z-10 mt-2 w-44 overflow-hidden rounded-md border border-stone-300 bg-white py-1">
                                 @foreach ($pilihanWaktu as $nilai => $teks)
                                     <button type="button" role="menuitemradio" data-nilai="{{ $nilai }}" aria-checked="{{ (string) $nilai === $rentangAktif ? 'true' : 'false' }}"
                                             x-bind:aria-checked="(rentang === @js((string) $nilai)).toString()"
@@ -218,9 +218,9 @@
 
             {{-- Ringkasan periode (D.4): satu query agregasi dengan filter yang sama. --}}
             <div class="border-b border-stone-200 px-6 py-2.5 text-sm text-stone-500" data-ringkasan-riwayat>
-                Setor <span class="font-medium text-setor tabular-nums" data-ringkasan-setor>{{ Format::rupiah($ringkasanRiwayat['total_setor']) }}</span>
+                Setor <span class="font-medium text-setor-700 tabular-nums" data-ringkasan-setor>{{ Format::rupiah($ringkasanRiwayat['total_setor']) }}</span>
                 <span class="mx-1.5 text-stone-300" aria-hidden="true">·</span>
-                Tarik <span class="font-medium text-tarik tabular-nums" data-ringkasan-tarik>{{ Format::rupiah($ringkasanRiwayat['total_tarik']) }}</span>
+                Tarik <span class="font-medium text-tarik-700 tabular-nums" data-ringkasan-tarik>{{ Format::rupiah($ringkasanRiwayat['total_tarik']) }}</span>
             </div>
 
             @if ($riwayatTransaksi->isEmpty())
@@ -246,8 +246,8 @@
                                 @php $setor = $transaksi->jenis_transaksi === TransaksiSimpanan::SETOR; @endphp
                                 <tr data-transaksi="{{ $setor ? 'setor' : 'tarik' }}" data-id-transaksi="{{ $transaksi->id }}">
                                     <td class="whitespace-nowrap">{{ Format::tanggal($transaksi->tanggal_transaksi) }}</td>
-                                    <td><x-ui.jenis-transaksi :jenis="$transaksi->jenis_transaksi" :nama-jenis="$transaksi->jenisSimpanan->nama_jenis" /></td>
-                                    <td class="num whitespace-nowrap font-medium {{ $setor ? 'text-setor' : 'text-tarik' }}" data-nominal>{{ $setor ? '+' : '-' }}{{ Format::rupiah($transaksi->jumlah) }}</td>
+                                    <td class="whitespace-nowrap"><x-ui.pil-transaksi :jenis="$transaksi->jenis_transaksi" :nama-jenis="$transaksi->jenisSimpanan->nama_jenis" /></td>
+                                    <td class="num whitespace-nowrap font-medium {{ $setor ? 'text-setor-700' : 'text-tarik-700' }}" data-nominal>{{ $setor ? '+' : '-' }}{{ Format::rupiah($transaksi->jumlah) }}</td>
                                     {{-- Nilai saldo_akhir dari database, tidak dihitung ulang dari hasil filter. --}}
                                     <td class="num whitespace-nowrap" data-saldo-jenis-ini>{{ Format::rupiah($transaksi->saldo_akhir) }}</td>
                                     <td>{{ $transaksi->staff->nama }}</td>

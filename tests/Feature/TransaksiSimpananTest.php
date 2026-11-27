@@ -1241,8 +1241,9 @@ class TransaksiSimpananTest extends TestCase
 
         $this->assertSame('+Rp 150.000', trim($xpath->query('//tr[@data-transaksi="setor"]//*[@data-nominal]')->item(0)->textContent));
         $this->assertSame('-Rp 50.000', trim($xpath->query('//tr[@data-transaksi="tarik"]//*[@data-nominal]')->item(0)->textContent));
-        $this->assertStringContainsString('text-setor', $xpath->query('//tr[@data-transaksi="setor"]//*[@data-nominal]')->item(0)->getAttribute('class'));
-        $this->assertStringContainsString('text-tarik', $xpath->query('//tr[@data-transaksi="tarik"]//*[@data-nominal]')->item(0)->getAttribute('class'));
+        // R1 D.1: teks nominal memakai token 700.
+        $this->assertContains('text-setor-700', explode(' ', $xpath->query('//tr[@data-transaksi="setor"]//*[@data-nominal]')->item(0)->getAttribute('class')));
+        $this->assertContains('text-tarik-700', explode(' ', $xpath->query('//tr[@data-transaksi="tarik"]//*[@data-nominal]')->item(0)->getAttribute('class')));
         $this->assertStringNotContainsString('−', $html);
         // Tanda di span normal-nums (bukan angka tabular) supaya "-Rp" serapat "+Rp".
         foreach (['setor' => '+', 'tarik' => '-'] as $jenis => $tanda) {
@@ -1478,7 +1479,7 @@ class TransaksiSimpananTest extends TestCase
         $this->assertSame('Semua waktu · 1.001 transaksi · Setor Rp 1.001.000 · Tarik Rp 0 · Bersih +Rp 1.001.000', trim(preg_replace('/\s+/', ' ', $xpath->query('//*[@data-ringkasan-riwayat-transaksi]')->item(0)->textContent)));
     }
 
-    public function test_riwayat_anggota_avatar_tautan_dan_penanda_nonaktif_di_baris_nomor(): void
+    public function test_riwayat_anggota_tanpa_avatar_tautan_dan_penanda_nonaktif_di_baris_nomor(): void
     {
         $aktif = Anggota::factory()->create(['nama' => 'Budi Santoso']);
         $keluar = Anggota::factory()->create(['nama' => 'Andi Pratama']);
@@ -1509,7 +1510,8 @@ class TransaksiSimpananTest extends TestCase
             }
             $this->assertStringContainsString('group', $xpath->query('..', $sel)->item(0)->getAttribute('class'));
 
-            $this->assertSame(1, $xpath->query('.//span[@aria-hidden="true"][contains(@class, "rounded-full")][contains(@class, "w-7")]', $sel)->length, 'Avatar sm.');
+            // R1 C.6: tanpa avatar inisial di tabel.
+            $this->assertSame(0, $xpath->query('.//span[@aria-hidden="true"][contains(@class, "w-7")]', $sel)->length, 'Tanpa avatar.');
             $tautan = $xpath->query('.//a[@data-tautan-detail]', $sel)->item(0);
             $this->assertSame($anggota->nama, trim($tautan->textContent));
             $kelasTautan = explode(' ', $tautan->getAttribute('class'));
@@ -1668,7 +1670,9 @@ class TransaksiSimpananTest extends TestCase
 
         foreach (['setor' => ['Setor', 'bg-setor'], 'tarik' => ['Tarik', 'bg-tarik']] as $jenis => [$label, $titik]) {
             $el = $xpath->query('//tr[@data-transaksi="'.$jenis.'"]//*[@data-pil-transaksi="'.$jenis.'"]')->item(0);
-            foreach (['rounded-full', 'border', 'border-stone-300', 'bg-white', 'text-[13px]'] as $kelas) {
+            // R1 C.5: pil cap bersudut 4 px (rounded), bukan rounded-full.
+            $this->assertNotContains('rounded-full', explode(' ', $el->getAttribute('class')));
+            foreach (['rounded', 'border', 'border-stone-300', 'bg-white', 'text-[13px]'] as $kelas) {
                 $this->assertContains($kelas, explode(' ', $el->getAttribute('class')), "{$jenis}: {$kelas}");
             }
             $bulatan = $xpath->query('./span[@aria-hidden="true"]', $el)->item(0)->getAttribute('class');
